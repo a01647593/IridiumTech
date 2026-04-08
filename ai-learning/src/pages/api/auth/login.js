@@ -1,42 +1,67 @@
-import { findUserByEmail, updateLastActivity } from '../../../lib/userService.js';
-import { verifyPassword, signToken, setAuthCookie, redirectByRole } from '../../../lib/auth.js';
+import { signToken, setAuthCookie, redirectByRole } from '../../../lib/auth.js';
+
+// Usuarios de prueba hardcodeados 
+const USUARIOS_PRUEBA = [
+  {
+    id: 1,
+    nombre: 'Usuario Demo',
+    correo: 'usuario@empresa.com',
+    password: '123456',
+    rol: 'Usuario',
+  },
+  {
+    id: 2,
+    nombre: 'Admin Demo',
+    correo: 'admin@empresa.com',
+    password: '123456',
+    rol: 'Administrador',
+  },
+  {
+    id: 3,
+    nombre: 'Super Admin Demo',
+    correo: 'super@empresa.com',
+    password: '123456',
+    rol: 'SuperAdministrador',
+  },
+];
 
 export const POST = async ({ request, cookies }) => {
   const body = await request.json();
   const { correo, password } = body;
 
   if (!correo || !password) {
-    return Response.json({ ok: false, error: 'Correo y contraseña requeridos.' }, { status: 422 });
+    return Response.json(
+      { ok: false, error: 'Correo y contraseña requeridos.' },
+      { status: 422 }
+    );
   }
 
-  const usuario = await findUserByEmail(correo.toLowerCase().trim()).catch(() => null);
-  const ERROR = 'Credenciales incorrectas.';
+  // Buscar usuario hardcodeado
+  const usuario = USUARIOS_PRUEBA.find(
+    u => u.correo === correo.toLowerCase().trim()
+  );
 
-  if (!usuario) {
-    return Response.json({ ok: false, error: ERROR }, { status: 401 });
+  if (!usuario || usuario.password !== password) {
+    return Response.json(
+      { ok: false, error: 'Credenciales incorrectas.' },
+      { status: 401 }
+    );
   }
 
-  if (!usuario.empleadoVerificado) {
-    return Response.json({ ok: false, error: 'Cuenta no verificada. Contacta a TI.' }, { status: 403 });
-  }
-
-  const passwordOk = await verifyPassword(password, usuario.passwordHash);
-  if (!passwordOk) {
-    return Response.json({ ok: false, error: ERROR }, { status: 401 });
-  }
-
+  // Crear token JWT
   const token = signToken({
     sub:    usuario.id,
     correo: usuario.correo,
     nombre: usuario.nombre,
-    rol:    usuario.rolNombre,
+    rol:    usuario.rol,
   });
 
   setAuthCookie(cookies, token);
-  updateLastActivity(usuario.id).catch(() => {});
 
   return Response.json({
     ok: true,
-    redirectTo: redirectByRole(usuario.rolNombre),
+    redirectTo: redirectByRole(usuario.rol),
   });
 };
+
+
