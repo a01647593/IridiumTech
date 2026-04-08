@@ -6,6 +6,8 @@ const session = getSession(Astro.cookies);
 if (session) return Astro.redirect(redirectByRole(session.rol));
 ---
 
+<!-- Cuando copien el codigo de Stitch, tienen que eliminar lo que diga <script></script> en el header -->
+
 <!DOCTYPE html>
 <html class="light" lang="es">
 <head>
