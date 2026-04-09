@@ -1,16 +1,16 @@
-import bcrypt from 'bcryptjs';
+//import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
 const COOKIE = 'auth_token';
 
-export async function hashPassword(plain) {
+/*export async function hashPassword(plain) {
   const rounds = Number(import.meta.env.BCRYPT_ROUNDS) || 12;
   return bcrypt.hash(plain, rounds);
 }
 
 export async function verifyPassword(plain, hash) {
   return bcrypt.compare(plain, hash);
-}
+}*/
 
 export function signToken(payload) {
   return jwt.sign(payload, import.meta.env.JWT_SECRET, {
