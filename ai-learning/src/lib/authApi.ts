@@ -29,10 +29,10 @@ export const AUTH_ACCOUNTS: AuthAccount[] = [
   {
     email: 'admin@whirlpool.com',
     password: 'Whirlpool123',
-    role: 'super-admin',
-    name: 'Admin GIT Labs',
+    role: 'content-admin',
+    name: 'Admin Contenido',
     area: 'Innovación',
-    redirectTo: '/admin/dashboard',
+    redirectTo: '/admin/content',
   },
   {
     email: 'super@whirlpool.com',

@@ -48,6 +48,6 @@ export function getSession(cookies) {
 
 export function redirectByRole(rol) {
   if (rol === 'SuperAdministrador') return '/admin/super';
-  if (rol === 'Administrador')      return '/admin/dashboard';
+  if (rol === 'Administrador')      return '/admin/content';
   return '/dashboard';
 }
