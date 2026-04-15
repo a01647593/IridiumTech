@@ -1,20 +1,73 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { MOCK_COURSES } from '../constants';
+import type { Course } from '../types';
+
+type ApiCourse = {
+  id: number | string;
+  titulo?: string;
+  descripcion?: string;
+  progreso?: { porcentaje?: number };
+};
+
+const normalizeApiCourse = (raw: ApiCourse): Course => ({
+  id: String(raw.id),
+  title: raw.titulo ?? 'Curso sin titulo',
+  description: raw.descripcion ?? 'Descripcion no disponible',
+  thumbnail: 'https://picsum.photos/seed/course-api/600/400',
+  category: 'General',
+  area: 'General',
+  progress: raw.progreso?.porcentaje ?? 0,
+  duration: '2h 00m',
+  level: 'Intermedio',
+  externalLinks: [],
+  modules: [],
+});
 
 export default function CourseCatalogPage() {
   const navigate = useNavigate();
+  const [courses, setCourses] = useState<Course[]>(MOCK_COURSES);
+  const [loading, setLoading] = useState(true);
   const [selectedArea, setSelectedArea] = useState('Todas');
   const [selectedLevel, setSelectedLevel] = useState('Todos');
 
-  const filteredCourses = MOCK_COURSES.filter(c => {
+  useEffect(() => {
+    let mounted = true;
+
+    const loadCourses = async () => {
+      try {
+        const response = await fetch('/api/courses');
+        if (!response.ok) throw new Error('No se pudieron cargar cursos');
+        const payload = await response.json();
+        const list = Array.isArray(payload) ? payload : [];
+        if (!mounted) return;
+        if (list.length > 0) {
+          setCourses(list.map(normalizeApiCourse));
+        } else {
+          setCourses(MOCK_COURSES);
+        }
+      } catch {
+        if (mounted) setCourses(MOCK_COURSES);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    loadCourses();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const filteredCourses = courses.filter(c => {
     const matchesArea = selectedArea === 'Todas' || c.area === selectedArea;
     const matchesLevel = selectedLevel === 'Todos' || c.level === selectedLevel;
     return matchesArea && matchesLevel;
   });
 
-  const areas = ['Todas', ...new Set(MOCK_COURSES.map(c => c.area))];
+  const areas = ['Todas', ...new Set(courses.map(c => c.area))];
   const levels = ['Todos', 'Básico', 'Intermedio', 'Avanzado'];
 
   return (
@@ -51,6 +104,10 @@ export default function CourseCatalogPage() {
           </div>
         </div>
       </header>
+
+      {loading && (
+        <div className="py-6 text-sm font-medium text-slate-500">Cargando cursos...</div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
         {filteredCourses.map((course, i) => (

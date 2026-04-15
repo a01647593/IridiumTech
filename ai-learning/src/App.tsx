@@ -7,6 +7,7 @@ import DashboardPage from './pages/DashboardPage';
 import AIAssistantPage from './pages/AIAssistantPage';
 import CourseCatalogPage from './pages/CourseCatalogPage';
 import CourseDetailPage from './pages/CourseDetailPage';
+import LessonPage from './pages/LessonPage';
 import QuizPage from './pages/QuizPage';
 import PromptLibraryPage from './pages/PromptLibraryPage';
 import KnowledgeBasePage from './pages/KnowledgeBasePage';
@@ -67,6 +68,7 @@ function AppContent() {
     if (path === '/') return 'home';
     if (path.startsWith('/dashboard')) return 'dashboard';
     if (path.startsWith('/courses')) return 'courses';
+    if (path.startsWith('/lesson')) return 'courses';
     if (path.startsWith('/prompts')) return 'prompts';
     if (path.startsWith('/leaderboard')) return 'leaderboard';
     if (path.startsWith('/assistant')) return 'assistant';
@@ -82,6 +84,7 @@ function AppContent() {
     if (path === '/') return 'Whirlpool AI Platform';
     if (path.startsWith('/dashboard')) return 'Dashboard';
     if (path.startsWith('/courses')) return 'Catálogo de Cursos';
+    if (path.startsWith('/lesson')) return 'Lección';
     if (path.startsWith('/prompts')) return 'Biblioteca de Gemas';
     if (path.startsWith('/leaderboard')) return 'Leaderboard';
     if (path.startsWith('/assistant')) return 'Asistente IA';
@@ -109,6 +112,7 @@ function AppContent() {
             <Route path="/dashboard" element={<DashboardPage user={user!} />} />
             <Route path="/courses" element={<CourseCatalogPage />} />
             <Route path="/courses/:id" element={<CourseDetailPage />} />
+            <Route path="/lesson" element={<LessonPage />} />
             <Route path="/quiz" element={<QuizPage />} />
             <Route path="/prompts" element={<PromptLibraryPage />} />
             <Route path="/leaderboard" element={<LeaderboardPage />} />

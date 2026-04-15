@@ -1,11 +1,76 @@
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { MOCK_COURSES } from '../constants';
+import type { Course } from '../types';
+
+type ApiLesson = { id: number | string; titulo?: string; completada?: boolean; orden?: number };
+type ApiCourseDetail = {
+  id: number | string;
+  titulo?: string;
+  descripcion?: string;
+  Leccion?: ApiLesson[];
+};
+
+const normalizeDetailCourse = (raw: ApiCourseDetail): Course => {
+  const lessons = Array.isArray(raw.Leccion) ? raw.Leccion : [];
+  const sorted = [...lessons].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+
+  return {
+    id: String(raw.id),
+    title: raw.titulo ?? 'Curso sin titulo',
+    description: raw.descripcion ?? 'Descripcion no disponible',
+    thumbnail: 'https://picsum.photos/seed/course-detail-api/1200/700',
+    category: 'General',
+    area: 'General',
+    progress: lessons.length ? Math.round((lessons.filter((l) => !!l.completada).length / lessons.length) * 100) : 0,
+    duration: '2h 00m',
+    level: 'Intermedio',
+    externalLinks: [
+      { type: 'pdf', label: 'Lectura de la leccion', url: '#' },
+      { type: 'video', label: 'Video de la leccion', url: '#' },
+    ],
+    modules: sorted.map((lesson) => ({
+      id: String(lesson.id),
+      title: lesson.titulo ?? 'Leccion',
+      completed: !!lesson.completada,
+      duration: '30m',
+    })),
+  };
+};
 
 export default function CourseDetailPage() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const course = MOCK_COURSES.find(c => String(c.id) === id) || MOCK_COURSES[0];
+  const fallbackCourse = useMemo(() => MOCK_COURSES.find((c) => String(c.id) === id) || MOCK_COURSES[0], [id]);
+  const [course, setCourse] = useState<Course>(fallbackCourse);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    const courseId = id ?? fallbackCourse.id;
+
+    const loadCourse = async () => {
+      try {
+        const response = await fetch(`/api/courses/${courseId}`);
+        if (!response.ok) throw new Error('No se pudo cargar el curso');
+        const payload = await response.json();
+        if (mounted && payload) {
+          setCourse(normalizeDetailCourse(payload));
+        }
+      } catch {
+        if (mounted) setCourse(fallbackCourse);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    loadCourse();
+
+    return () => {
+      mounted = false;
+    };
+  }, [id, fallbackCourse]);
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-7xl mx-auto space-y-8 sm:space-y-12">
@@ -74,7 +139,7 @@ export default function CourseDetailPage() {
                 ></motion.div>
               </div>
               <button 
-                onClick={() => navigate(`/quiz?id=q1&courseId=${course.id}`)}
+                onClick={() => navigate(`/lesson?courseId=${course.id}&moduleId=${course.modules?.[0]?.id || 'm1'}`)}
                 className="w-full py-5 bg-primary text-white font-bold rounded-[1.5rem] shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3"
               >
                 <span className="material-symbols-outlined">play_arrow</span>
@@ -84,6 +149,8 @@ export default function CourseDetailPage() {
           </motion.div>
         </div>
       </section>
+
+      {loading && <div className="text-sm font-medium text-slate-500">Cargando detalle del curso...</div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
         <div className="lg:col-span-8 space-y-12">
@@ -104,7 +171,7 @@ export default function CourseDetailPage() {
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.1 }}
-                  onClick={() => navigate(`/quiz?id=q1&courseId=${course.id}`)}
+                  onClick={() => navigate(`/lesson?courseId=${course.id}&moduleId=${module.id}`)}
                   className="bg-white p-8 rounded-[2rem] border border-slate-100 flex items-center gap-8 group hover:border-primary hover:shadow-xl transition-all cursor-pointer"
                 >
                   <div className="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center text-primary font-black text-xl group-hover:bg-primary group-hover:text-white transition-all shadow-sm">

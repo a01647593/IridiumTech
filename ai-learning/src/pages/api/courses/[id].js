@@ -2,7 +2,7 @@ import { getCourseById, updateCourse, deleteCourse } from '../../../../lib/cours
  
 export async function GET({ params, locals }) {
   try {
-    const curso = await getCourseById(Number(params.id), locals.usuario.id);
+    const curso = await getCourseById(Number(params.id), locals?.usuario?.id ?? null);
     if (!curso) return new Response(JSON.stringify({ error: 'No encontrado' }), { status: 404 });
     return new Response(JSON.stringify(curso), { status: 200 });
   } catch (e) {
@@ -11,7 +11,7 @@ export async function GET({ params, locals }) {
 }
  
 export async function PUT({ params, request, locals }) {
-  const rol = locals.usuario.Rol?.nombre;
+  const rol = locals?.usuario?.Rol?.nombre;
   if (!['Administrador', 'SuperAdministrador'].includes(rol)) {
     return new Response(JSON.stringify({ error: 'Sin permiso' }), { status: 403 });
   }
@@ -25,7 +25,7 @@ export async function PUT({ params, request, locals }) {
 }
  
 export async function DELETE({ params, locals }) {
-  const rol = locals.usuario.Rol?.nombre;
+  const rol = locals?.usuario?.Rol?.nombre;
   if (rol !== 'Administrador' && rol !== 'SuperAdministrador') {
     return new Response(JSON.stringify({ error: 'Sin permiso' }), { status: 403 });
   }
