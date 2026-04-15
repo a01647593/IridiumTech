@@ -80,7 +80,8 @@ export default function QuizPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
-  const leccionId = queryParams.get('id');
+  const leccionId = queryParams.get('leccionId') || queryParams.get('moduleId') || queryParams.get('id');
+  const courseId = queryParams.get('courseId');
   
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
@@ -203,6 +204,24 @@ export default function QuizPage() {
           }
         } catch (err) {
           console.warn('Error guardando en API:', err);
+        }
+      }
+
+      // Registrar progreso real del curso al completar leccion/quiz
+      const leccionIdNum = Number(leccionId);
+      const courseIdNum = Number(courseId);
+      if (Number.isFinite(leccionIdNum) && Number.isFinite(courseIdNum)) {
+        try {
+          await fetch('/api/lessons/complete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              leccionId: leccionIdNum,
+              cursoId: courseIdNum,
+            }),
+          });
+        } catch (err) {
+          console.warn('No se pudo registrar progreso de leccion:', err);
         }
       }
 

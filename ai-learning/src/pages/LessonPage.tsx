@@ -7,6 +7,12 @@ import type { Course } from '../types';
 type ApiContent = { id: number | string; tipo?: 'pdf' | 'slides' | 'sheets' | 'video'; titulo?: string; contenidoURLoTexto?: string };
 type ApiLesson = { id: number | string; titulo?: string; orden?: number; Contenido?: ApiContent[]; completada?: boolean };
 type ApiCourseDetail = { id: number | string; titulo?: string; descripcion?: string; Leccion?: ApiLesson[] };
+type ModuleComment = {
+  id: string;
+  text: string;
+  createdAt: string;
+  authorName: string;
+};
 
 const normalizeLessonCourse = (raw: ApiCourseDetail): Course => {
   const lessons = Array.isArray(raw.Leccion) ? raw.Leccion : [];
@@ -59,6 +65,8 @@ export default function LessonPage() {
     MOCK_COURSES.find((c) => String(c.id) === courseId) || MOCK_COURSES[0]
   );
   const [loading, setLoading] = useState(true);
+  const [commentInput, setCommentInput] = useState('');
+  const [moduleComments, setModuleComments] = useState<ModuleComment[]>([]);
 
   useEffect(() => {
     let mounted = true;
@@ -91,6 +99,62 @@ export default function LessonPage() {
     if (!moduleId) return course.modules[0];
     return course.modules.find((m) => m.id === moduleId) || course.modules[0];
   }, [course.modules, moduleId]);
+
+  const currentUserKey = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('whirlpool_user');
+      if (!raw) return 'anon';
+      const parsed = JSON.parse(raw);
+      return parsed?.email || 'anon';
+    } catch {
+      return 'anon';
+    }
+  }, []);
+
+  const commentsStorageKey = useMemo(() => {
+    const moduleKey = selectedModule?.id || 'sin-modulo';
+    return `module_comments:${currentUserKey}:${course.id}:${moduleKey}`;
+  }, [currentUserKey, course.id, selectedModule?.id]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(commentsStorageKey);
+      const parsed = raw ? JSON.parse(raw) : [];
+      setModuleComments(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      setModuleComments([]);
+    }
+  }, [commentsStorageKey]);
+
+  const handleAddComment = () => {
+    const trimmed = commentInput.trim();
+    if (!trimmed) return;
+
+    let authorName = 'Usuario';
+    try {
+      const raw = localStorage.getItem('whirlpool_user');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        authorName = parsed?.name || parsed?.email || 'Usuario';
+      }
+    } catch {
+      authorName = 'Usuario';
+    }
+
+    const nextComments: ModuleComment[] = [
+      {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        text: trimmed,
+        createdAt: new Date().toISOString(),
+        authorName,
+      },
+      ...moduleComments,
+    ];
+
+    setModuleComments(nextComments);
+    setCommentInput('');
+    localStorage.setItem(commentsStorageKey, JSON.stringify(nextComments));
+  };
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-6xl mx-auto space-y-8">
@@ -159,8 +223,45 @@ export default function LessonPage() {
             ))}
           </div>
 
+          <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-6 space-y-4">
+            <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">Comentarios del modulo</h3>
+
+            <div className="space-y-3">
+              <textarea
+                value={commentInput}
+                onChange={(event) => setCommentInput(event.target.value)}
+                placeholder="Escribe un comentario o duda sobre este modulo..."
+                rows={3}
+                className="w-full resize-none rounded-2xl border border-slate-200 bg-white p-3 text-sm text-on-surface placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20"
+              />
+              <button
+                onClick={handleAddComment}
+                disabled={!commentInput.trim()}
+                className="w-full py-2.5 rounded-xl bg-primary text-white text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Guardar comentario
+              </button>
+            </div>
+
+            <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+              {moduleComments.length === 0 ? (
+                <p className="text-sm text-slate-500">Aun no hay comentarios en este modulo.</p>
+              ) : (
+                moduleComments.map((comment) => (
+                  <div key={comment.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                    <p className="text-xs font-bold text-primary mb-1">{comment.authorName || 'Usuario'}</p>
+                    <p className="text-sm text-slate-700 leading-relaxed">{comment.text}</p>
+                    <p className="text-[10px] uppercase tracking-widest text-slate-400 mt-2">
+                      {new Date(comment.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
           <button
-            onClick={() => navigate(`/quiz?id=${course.id}&courseId=${course.id}&moduleId=${selectedModule?.id}`)}
+            onClick={() => navigate(`/quiz?leccionId=${selectedModule?.id}&courseId=${course.id}`)}
             className="w-full py-4 bg-primary text-white font-bold rounded-2xl shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
           >
             Continuar al Quiz
