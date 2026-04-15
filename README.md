@@ -32,3 +32,6 @@ Base full-stack para el reto: frontend React + backend Express + WebSockets + pe
 ## Variables de entorno
 - `VITE_API_BASE_URL` opcional, por defecto usa el mismo origen con proxy de Vite.
 - `PORT` opcional para el backend, por defecto `3001`.
+
+## Repo
+IridiumTech / Whirlpool
