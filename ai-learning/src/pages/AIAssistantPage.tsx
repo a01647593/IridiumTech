@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 // import { GoogleGenAI } from "@google/genai";
-import whirlpoolLogo from '../assets/logowhirlpool.png';
 
 interface Message {
   id: string;
@@ -96,12 +95,8 @@ export default function AIAssistantPage() {
           {messages.map((msg) => (
             <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} items-end gap-3`}>
               {msg.role === 'assistant' && (
-                <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center overflow-hidden flex-shrink-0 shadow-sm">
-                  <img 
-                    src={whirlpoolLogo}
-                    alt="Whirlpool" 
-                    className="w-5 h-5 object-contain"
-                  />
+                <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center flex-shrink-0 shadow-sm text-primary">
+                  <span className="material-symbols-outlined text-[18px] material-symbols-fill">smart_toy</span>
                 </div>
               )}
               <div className={`max-w-[85%] sm:max-w-[70%] rounded-2xl p-4 shadow-sm ${
