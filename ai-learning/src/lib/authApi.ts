@@ -34,6 +34,14 @@ export const AUTH_ACCOUNTS: AuthAccount[] = [
     area: 'Innovación',
     redirectTo: '/admin/dashboard',
   },
+  {
+    email: 'super@whirlpool.com',
+    password: 'Whirlpool123',
+    role: 'super-admin',
+    name: 'Super Admin Demo',
+    area: 'Innovación',
+    redirectTo: '/admin/dashboard',
+  },
 ];
 
 export function findAuthAccount(email: string, password: string) {

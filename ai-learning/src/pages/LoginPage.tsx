@@ -11,6 +11,7 @@ interface LoginPageProps {
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const inferRoleFromRedirect = (redirectTo?: string): UserRole => {
+  if (redirectTo?.startsWith('/admin/super')) return 'super-admin';
   if (redirectTo?.startsWith('/admin/dashboard')) return 'super-admin';
   if (redirectTo?.startsWith('/admin/content')) return 'content-admin';
   return 'user';
@@ -23,7 +24,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   const [errors, setErrors] = useState<{ email?: string; password?: string; credentials?: string }>({});
 
   const handleSSOLogin = (role: UserRole) => {
-    const email = role === 'super-admin' ? 'admin@whirlpool.com' : role === 'content-admin' ? 'editor@whirlpool.com' : 'empleado@whirlpool.com';
+    const email = role === 'super-admin' ? 'super@whirlpool.com' : role === 'content-admin' ? 'editor@whirlpool.com' : 'empleado@whirlpool.com';
     onLogin(email, role);
   };
 
