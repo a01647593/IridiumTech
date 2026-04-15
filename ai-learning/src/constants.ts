@@ -12,12 +12,12 @@ export const MOCK_BADGES: Badge[] = [
 export const MOCK_COURSES: Course[] = [
   {
     id: '1',
-    title: 'Advanced Neural Architectures',
-    description: 'Explora estructuras profundas desde Transformers hasta GANs aplicadas a manufactura.',
+    title: 'Advanced Neural Architectures - Whirlpool',
+    description: 'Explora estructuras profundas desde Transformers hasta GANs aplicadas a manufactura en Whirlpool.',
     thumbnail: 'https://picsum.photos/seed/course1/600/400',
     category: 'Ingeniería',
     area: 'Ingeniería',
-    progress: 45,
+    progress: 0,
     duration: '6h 30m',
     level: 'Avanzado',
     externalLinks: [
@@ -25,65 +25,10 @@ export const MOCK_COURSES: Course[] = [
       { type: 'slides', label: 'Presentación Módulo 1', url: '#' }
     ],
     modules: [
-      { id: 'm1', title: 'Introducción a Transformers', completed: true, duration: '45m' },
-      { id: 'm2', title: 'Mecanismos de Atención', completed: true, duration: '1h' },
+      { id: 'm1', title: 'Introducción a Transformers', completed: false, duration: '45m' },
+      { id: 'm2', title: 'Mecanismos de Atención', completed: false, duration: '1h' },
       { id: 'm3', title: 'GANs y Modelos Generativos', completed: false, duration: '1h 30m' },
       { id: 'm4', title: 'Optimización de Hiperparámetros', completed: false, duration: '2h' }
-    ]
-  },
-  {
-    id: '2',
-    title: 'AI for Finance: Predictive Models',
-    description: 'Modelos predictivos aplicados a finanzas corporativas y presupuestos.',
-    thumbnail: 'https://picsum.photos/seed/finance/600/400',
-    category: 'Finanzas',
-    area: 'Finanzas',
-    progress: 0,
-    isNew: true,
-    duration: '4h 15m',
-    level: 'Intermedio',
-    externalLinks: [
-      { type: 'sheets', label: 'Dataset de Práctica Financiera', url: '#' }
-    ],
-    modules: [
-      { id: 'f1', title: 'Series de Tiempo para Presupuestos', completed: false, duration: '1h' },
-      { id: 'f2', title: 'Análisis de Riesgo con IA', completed: false, duration: '1h 15m' }
-    ]
-  },
-  {
-    id: '3',
-    title: 'Generative AI for Marketing',
-    description: 'Creación de contenido, segmentación y campañas con LLMs de Google.',
-    thumbnail: 'https://picsum.photos/seed/marketing/600/400',
-    category: 'Marketing',
-    area: 'Marketing',
-    progress: 100,
-    duration: '3h 45m',
-    level: 'Básico',
-    externalLinks: [
-      { type: 'video', label: 'Masterclass: Prompt Engineering para Creativos', url: '#' }
-    ],
-    modules: [
-      { id: 'mk1', title: 'Copywriting con GPT y Gemini', completed: true, duration: '1h' },
-      { id: 'mk2', title: 'Segmentación Psicográfica Avanzada', completed: true, duration: '1h 30m' }
-    ]
-  },
-  {
-    id: '4',
-    title: 'AI in Supply Chain & Logistics',
-    description: 'Optimización de rutas y gestión de inventarios mediante algoritmos de IA.',
-    thumbnail: 'https://picsum.photos/seed/logistics/600/400',
-    category: 'Operaciones',
-    area: 'Logística',
-    progress: 15,
-    duration: '5h 00m',
-    level: 'Intermedio',
-    externalLinks: [
-      { type: 'pdf', label: 'Whitepaper: Logística 4.0', url: '#' }
-    ],
-    modules: [
-      { id: 'l1', title: 'Predicción de Demanda', completed: true, duration: '1h' },
-      { id: 'l2', title: 'Optimización de Rutas en Tiempo Real', completed: false, duration: '1h 30m' }
     ]
   }
 ];

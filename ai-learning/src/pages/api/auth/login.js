@@ -5,22 +5,22 @@ const USUARIOS_PRUEBA = [
   {
     id: 1,
     nombre: 'Usuario Demo',
-    correo: 'usuario@empresa.com',
-    password: '123456',
+    correo: 'empleado@whirlpool.com',
+    password: 'Whirlpool123',
     rol: 'Usuario',
   },
   {
     id: 2,
     nombre: 'Admin Demo',
-    correo: 'admin@empresa.com',
-    password: '123456',
+    correo: 'admin@whirlpool.com',
+    password: 'Whirlpool123',
     rol: 'Administrador',
   },
   {
     id: 3,
     nombre: 'Super Admin Demo',
-    correo: 'super@empresa.com',
-    password: '123456',
+    correo: 'super@whirlpool.com',
+    password: 'Whirlpool123',
     rol: 'SuperAdministrador',
   },
 ];
