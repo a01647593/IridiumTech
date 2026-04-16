@@ -94,6 +94,12 @@ export default function KnowledgeBasePage() {
           <p className="text-white/70 text-sm mb-8 leading-relaxed">
             Nuestro asistente inteligente está entrenado con toda la documentación de GIT Labs para ayudarte en tiempo real.
           </p>
+          <div className="mb-8 rounded-2xl bg-white/10 border border-white/10 p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-white/60 mb-1">Apoyo directo</p>
+            <p className="text-sm font-bold text-white">soporte.gitlabs@whirlpool.com</p>
+            <p className="text-sm font-bold text-white mt-1">+52 81 1234 5678</p>
+            <p className="text-xs text-white/70 mt-1">Atención de lunes a viernes, de 10:00 a 18:00.</p>
+          </div>
           <button 
             onClick={() => navigate('/assistant')}
             className="w-full py-4 bg-white text-primary font-bold rounded-2xl hover:scale-105 transition-all flex items-center justify-center gap-2"
