@@ -22,6 +22,8 @@ import { MOCK_BADGES } from './constants';
 function AppContent() {
   const [user, setUser] = useState<User | null>(null);
   const location = useLocation();
+  const isSuperAdmin = user?.role === 'super-admin';
+  const superAdminAllowedPaths = ['/admin/dashboard', '/admin/users', '/assistant', '/login'];
 
   const handleLogin = (email: string, role: UserRole) => {
     const newUser: User = {
@@ -61,6 +63,10 @@ function AppContent() {
 
   if (user && location.pathname === '/login') {
     return <Navigate to="/" replace />;
+  }
+
+  if (isSuperAdmin && !superAdminAllowedPaths.some(path => location.pathname === path || location.pathname.startsWith(`${path}/`))) {
+    return <Navigate to="/admin/dashboard" replace />;
   }
 
   const getActivePage = () => {

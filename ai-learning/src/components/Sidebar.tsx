@@ -12,7 +12,13 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ activePage, user, onLogout, isOpen, onClose }: SidebarProps) {
-  const navItems = [
+  const navItems = user.role === 'super-admin'
+    ? [
+        { id: 'admin-dashboard', label: 'Global Analytics', icon: 'analytics', path: '/admin/dashboard', roles: ['super-admin'] },
+        { id: 'user-management', label: 'Usuarios y Roles', icon: 'manage_accounts', path: '/admin/users', roles: ['super-admin'] },
+        { id: 'assistant', label: 'Asistente IA', icon: 'smart_toy', path: '/assistant', roles: ['super-admin'] },
+      ]
+    : [
     { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', path: '/dashboard', roles: ['user', 'content-admin', 'super-admin'] },
     { id: 'courses', label: 'Cursos', icon: 'school', path: '/courses', roles: ['user', 'content-admin', 'super-admin'] },
     { id: 'prompts', label: 'Biblioteca de Gemas', icon: 'auto_awesome', path: '/prompts', roles: ['user', 'content-admin', 'super-admin'] },
@@ -22,7 +28,7 @@ export default function Sidebar({ activePage, user, onLogout, isOpen, onClose }:
     { id: 'admin-dashboard', label: 'Global Analytics', icon: 'analytics', path: '/admin/dashboard', roles: ['super-admin'] },
     { id: 'content-management', label: 'Gestión de Contenido', icon: 'edit_note', path: '/admin/content', roles: ['super-admin', 'content-admin'] },
     { id: 'user-management', label: 'Usuarios y Roles', icon: 'manage_accounts', path: '/admin/users', roles: ['super-admin'] },
-  ];
+    ];
 
   const filteredItems = navItems.filter(item => item.roles.includes(user.role));
 
