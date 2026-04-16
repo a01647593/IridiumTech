@@ -58,6 +58,117 @@ export const MOCK_QUIZZES: Quiz[] = [
         correctAnswer: 1
       }
     ]
+  },
+  {
+    id: 'q2',
+    courseId: '1',
+    title: 'Quiz: Mecanismos de Atención Avanzados',
+    questions: [
+      {
+        id: '1',
+        question: '¿Cuántas capas de atención hay en los Transformers estándar?',
+        options: ['2', '4', '6', '12'],
+        correctAnswer: 2
+      },
+      {
+        id: '2',
+        question: '¿Cuál es la complejidad temporal del mecanismo Self-Attention?',
+        options: ['O(n)', 'O(n log n)', 'O(n²)', 'O(n³)'],
+        correctAnswer: 2
+      },
+      {
+        id: '3',
+        question: '¿Qué permite el Multi-Head Attention en los Transformers?',
+        options: ['Procesar múltiples muestras en paralelo', 'Atender a diferentes representaciones del mismo contexto', 'Aumentar el tamaño del batch', 'Reducir memoria'],
+        correctAnswer: 1
+      },
+      {
+        id: '4',
+        question: '¿Cuál es el propósito del Positional Encoding en los Transformers?',
+        options: ['Normalizar los pesos', 'Proporcionar información sobre el orden de las palabras', 'Reducir overfitting', 'Acelerar convergencia'],
+        correctAnswer: 1
+      }
+    ]
+  },
+  {
+    id: 'q3',
+    courseId: '1',
+    title: 'Quiz: GANs y Generación de Datos',
+    questions: [
+      {
+        id: '1',
+        question: '¿Cuál es el componente generador en una GAN?',
+        options: ['Lee datos reales y los clasifica', 'Crea datos sintéticos a partir de ruido', 'Optimiza los hiperparámetros', 'Evalúa la precisión del modelo'],
+        correctAnswer: 1
+      },
+      {
+        id: '2',
+        question: '¿Cuál es el rol del discriminador en una GAN?',
+        options: ['Generar nuevas imágenes', 'Distinguir entre datos reales y sintéticos', 'Comprimir datos', 'Entrenar el generador'],
+        correctAnswer: 1
+      },
+      {
+        id: '3',
+        question: 'En el contexto de GANs, ¿qué es el "Nash Equilibrium"?',
+        options: ['El punto donde el discriminador siempre acepta el generador', 'El punto de convergencia donde ambas redes alcanzan rendimiento óptimo', 'La máxima precisión del discriminador', 'La salida del generador'],
+        correctAnswer: 1
+      },
+      {
+        id: '4',
+        question: '¿Cuál es un desafío común en el entrenamiento de GANs?',
+        options: ['Falta de datos de entrenamiento', 'Mode collapse', 'Complejidad lineal', 'Kernels insuficientes'],
+        correctAnswer: 1
+      },
+      {
+        id: '5',
+        question: '¿Qué es el "Mode Collapse" en GANs?',
+        options: ['Fallos del sistema', 'Cuando el generador aprende a generar solo una variedad limitada de muestras', 'Pérdida de memoria', 'Overflow del discriminador'],
+        correctAnswer: 1
+      }
+    ]
+  },
+  {
+    id: 'q4',
+    courseId: '1',
+    title: 'Quiz: Optimización de Hiperparámetros',
+    questions: [
+      {
+        id: '1',
+        question: '¿Cuál es el hiperparámetro más crítico al entrenar modelos profundos?',
+        options: ['Batch size', 'Learning rate', 'Número de capas', 'Función de activación'],
+        correctAnswer: 1
+      },
+      {
+        id: '2',
+        question: '¿Qué es el "Learning Rate Scheduling"?',
+        options: ['Aumentar el learning rate cada época', 'Ajustar dinámicamente el learning rate durante el entrenamiento', 'Fijar el learning rate en un valor constante', 'Eliminar el learning rate'],
+        correctAnswer: 1
+      },
+      {
+        id: '3',
+        question: '¿Cuál es la técnica de regularización más común para evitar overfitting?',
+        options: ['Batch Normalization', 'L1/L2 Regularization', 'Dropout', 'Todas las anteriores'],
+        correctAnswer: 3
+      },
+      {
+        id: '4',
+        question: '¿Qué hace el momentum en algoritmos de optimización como SGD?',
+        options: ['Acelera la convergencia acumulando gradientes previos', 'Normaliza los datos', 'Aumenta el batch size', 'Reduce la precisión'],
+        correctAnswer: 0
+      },
+      {
+        id: '5',
+        question: '¿Cuál es la principal ventaja del Adaptive Learning Rate (Adam) sobre SGD estándar?',
+        options: ['Es más rápido siempre', 'Se adapta automáticamente a diferentes escalas de características', 'Nunca sufre de overfitting', 'Requiere menos datos'],
+        correctAnswer: 1
+      },
+      {
+        id: '6',
+        question: '¿Cómo se relaciona el batch size con la convergencia del modelo?',
+        options: ['Batch size más grande = siempre mejor convergencia', 'Batch size más pequeño = gradientes más estables', 'Batch size más grande = gradientes más estables pero convergencia más lenta', 'No hay relación'],
+        correctAnswer: 2
+      }
+    ]
   }
 ];
 

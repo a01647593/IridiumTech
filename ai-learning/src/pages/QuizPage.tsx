@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
+import { MOCK_QUIZZES } from '../constants';
 
 interface Option {
   id: number;
@@ -25,6 +26,58 @@ interface Leccion {
   cursoId: number;
   cursoTitulo: string;
 }
+
+// Mapeo de módulos (m1, m2, m3, m4) a quizzes (q1, q2, q3, q4)
+const MODULE_TO_QUIZ_MAP: Record<string, string> = {
+  'm1': 'q1',
+  'm2': 'q2',
+  'm3': 'q3',
+  'm4': 'q4',
+  '1': 'q1',
+  '2': 'q2',
+  '3': 'q3',
+  '4': 'q4',
+};
+
+// Función para convertir quiz del formato MOCK_QUIZZES al formato esperado
+const normalizeQuiz = (mockQuiz: any, moduleId: string): { leccion: Leccion; preguntas: Question[] } => {
+  const orden = parseInt(moduleId.replace('m', '') || '1');
+  const leccion: Leccion = {
+    id: orden || 1,
+    titulo: mockQuiz.title || 'Quiz',
+    orden: orden,
+    fechaLimite: '2024-12-31',
+    cursoId: 1,
+    cursoTitulo: 'Advanced Neural Architectures - Whirlpool'
+  };
+
+  const preguntas: Question[] = mockQuiz.questions.map((q: any, idx: number) => ({
+    id: q.id ? parseInt(String(q.id)) : idx + 1,
+    texto: q.question,
+    orden: idx + 1,
+    opciones: q.options.map((opt: string, optIdx: number) => ({
+      id: optIdx + 1,
+      preguntaId: q.id ? parseInt(String(q.id)) : idx + 1,
+      texto: opt,
+      esCorrecta: optIdx === q.correctAnswer,
+      explicacion: `Opción ${optIdx === q.correctAnswer ? 'correcta' : 'incorrecta'}`
+    }))
+  }));
+
+  return { leccion, preguntas };
+};
+
+// Función helper para obtener el mock quiz
+const getMockQuiz = (leccionId: string | null): { leccion: Leccion; preguntas: Question[] } => {
+  // Mapear leccionId a quizId
+  const quizId = leccionId ? MODULE_TO_QUIZ_MAP[leccionId] || 'q1' : 'q1';
+  
+  // Encontrar el quiz en MOCK_QUIZZES
+  const mockQuiz = MOCK_QUIZZES.find(q => q.id === quizId) || MOCK_QUIZZES[0];
+  
+  // Normalizar y retornar
+  return normalizeQuiz(mockQuiz, leccionId || 'm1');
+};
 
 // Mock Quiz - Fallback mientras se crean otros
 const MOCK_QUIZ: { leccion: Leccion; preguntas: Question[] } = {
@@ -96,6 +149,7 @@ export default function QuizPage() {
   const [sesionId, setSesionId] = useState<number | null>(null);
   const [respuestas, setRespuestas] = useState<any[]>([]);
   const [finalPercentage, setFinalPercentage] = useState(0);
+  const [nextLeccion, setNextLeccion] = useState<Leccion | null>(null);
 
   useEffect(() => {
     const initializeQuiz = async () => {
@@ -104,8 +158,9 @@ export default function QuizPage() {
         
         // Si no hay leccionId, usar mock quiz
         if (!leccionId) {
-          setLeccion(MOCK_QUIZ.leccion);
-          setQuestions(MOCK_QUIZ.preguntas);
+          const mockData = getMockQuiz(leccionId);
+          setLeccion(mockData.leccion);
+          setQuestions(mockData.preguntas);
           setSesionId(null); // Sin sesión en mock
           setLoading(false);
           return;
@@ -128,8 +183,9 @@ export default function QuizPage() {
       } catch (err) {
         // En caso de error, usar mock quiz como fallback
         console.warn('Usando mock quiz como fallback:', err);
-        setLeccion(MOCK_QUIZ.leccion);
-        setQuestions(MOCK_QUIZ.preguntas);
+        const mockData = getMockQuiz(leccionId);
+        setLeccion(mockData.leccion);
+        setQuestions(mockData.preguntas);
         setSesionId(null);
         setLoading(false);
       }
@@ -137,6 +193,34 @@ export default function QuizPage() {
 
     initializeQuiz();
   }, [leccionId]);
+
+  // Cargar módulo siguiente
+  useEffect(() => {
+    const fetchNextLeccion = async () => {
+      if (!leccion || !courseId) return;
+      
+      try {
+        // Obtener detalles del curso para encontrar el siguiente módulo
+        const res = await fetch(`/api/courses/${courseId}`);
+        if (!res.ok) throw new Error('Error al cargar el curso');
+        
+        const courseData = await res.json();
+        const lecciones = courseData.lecciones || [];
+        
+        // Buscar la lección siguiente (con orden mayor que la actual)
+        const sortedLecciones = [...lecciones].sort((a, b) => a.orden - b.orden);
+        const nextIdx = sortedLecciones.findIndex(l => l.id === leccion.id);
+        
+        if (nextIdx !== -1 && nextIdx < sortedLecciones.length - 1) {
+          setNextLeccion(sortedLecciones[nextIdx + 1]);
+        }
+      } catch (err) {
+        console.warn('No se pudo determinar el siguiente módulo:', err);
+      }
+    };
+    
+    fetchNextLeccion();
+  }, [leccion, courseId]);
 
   const currentQuestion = questions[currentQuestionIndex];
   const progress = questions.length > 0 ? ((currentQuestionIndex + 1) / questions.length) * 100 : 0;
@@ -252,10 +336,10 @@ export default function QuizPage() {
         <div className="bg-red-50 border border-red-200 rounded-2xl p-6">
           <p className="text-red-600 font-bold mb-4">{error}</p>
           <button 
-            onClick={() => navigate('/dashboard')} 
+            onClick={() => navigate('/courses')} 
             className="bg-primary text-white px-6 py-2 rounded-lg hover:scale-105 transition-all"
           >
-            Volver al Dashboard
+            Volver a Cursos
           </button>
         </div>
       </div>
@@ -310,11 +394,19 @@ export default function QuizPage() {
           )}
 
           <div className="flex flex-col sm:flex-row gap-4">
+            {nextLeccion && (
+              <button 
+                onClick={() => navigate(`/course/${courseId}/lesson/${nextLeccion.id}`)}
+                className="flex-1 bg-accent-blue text-white py-4 rounded-2xl font-bold shadow-lg hover:scale-105 transition-all"
+              >
+                Módulo Siguiente
+              </button>
+            )}
             <button 
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/courses')}
               className="flex-1 bg-primary text-white py-4 rounded-2xl font-bold shadow-lg hover:scale-105 transition-all"
             >
-              Volver al Dashboard
+              Volver a Cursos
             </button>
             <button 
               onClick={() => window.location.reload()}
