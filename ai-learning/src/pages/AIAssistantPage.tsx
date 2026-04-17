@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-// import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI } from '@google/genai';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface Message {
   id: string;
@@ -8,7 +10,12 @@ interface Message {
   timestamp: Date;
 }
 
-// const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const geminiApiKey =
+  (import.meta as { env?: Record<string, string> }).env?.VITE_GEMINI_API_KEY ||
+  (process.env as { GEMINI_API_KEY?: string }).GEMINI_API_KEY ||
+  '';
+
+const ai = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
 
 export default function AIAssistantPage() {
   const [messages, setMessages] = useState<Message[]>([
@@ -33,6 +40,17 @@ export default function AIAssistantPage() {
 
   const handleSend = async () => {
     if (!input.trim() || isTyping) return;
+
+    if (!ai) {
+      const missingKeyMessage: Message = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: 'Falta configurar la API key de Gemini. Agrega GEMINI_API_KEY o VITE_GEMINI_API_KEY en tu archivo .env y reinicia el servidor.',
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, missingKeyMessage]);
+      return;
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -104,7 +122,34 @@ export default function AIAssistantPage() {
                 ? 'bg-primary text-white' 
                 : 'bg-white border border-slate-200 text-on-surface'
               }`}>
-                <p className="text-sm sm:text-base leading-relaxed">{msg.content}</p>
+                {msg.role === 'assistant' ? (
+                  <div className="text-sm sm:text-base leading-relaxed text-slate-700">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        h1: ({ children }) => <h1 className="text-lg sm:text-xl font-black text-on-surface mt-2 mb-3">{children}</h1>,
+                        h2: ({ children }) => <h2 className="text-base sm:text-lg font-bold text-on-surface mt-2 mb-2">{children}</h2>,
+                        h3: ({ children }) => <h3 className="text-sm sm:text-base font-bold text-on-surface mt-2 mb-2">{children}</h3>,
+                        p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                        ul: ({ children }) => <ul className="list-disc pl-5 mb-2 space-y-1">{children}</ul>,
+                        ol: ({ children }) => <ol className="list-decimal pl-5 mb-2 space-y-1">{children}</ol>,
+                        li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                        strong: ({ children }) => <strong className="font-bold text-on-surface">{children}</strong>,
+                        code: ({ children }) => <code className="px-1.5 py-0.5 rounded bg-slate-100 text-[13px] text-primary">{children}</code>,
+                        blockquote: ({ children }) => <blockquote className="border-l-4 border-primary/30 pl-3 italic text-slate-600 my-2">{children}</blockquote>,
+                        a: ({ href, children }) => (
+                          <a href={href} target="_blank" rel="noreferrer" className="text-primary underline underline-offset-2 hover:text-accent-blue">
+                            {children}
+                          </a>
+                        ),
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  <p className="text-sm sm:text-base leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                )}
                 <p className={`text-[10px] mt-2 font-bold uppercase tracking-widest ${msg.role === 'user' ? 'text-white/60' : 'text-slate-400'}`}>
                   {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </p>
