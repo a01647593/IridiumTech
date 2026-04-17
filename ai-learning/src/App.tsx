@@ -22,8 +22,6 @@ import { MOCK_BADGES } from './constants';
 function AppContent() {
   const [user, setUser] = useState<User | null>(null);
   const location = useLocation();
-  const isSuperAdmin = user?.role === 'super-admin';
-  const superAdminAllowedPaths = ['/admin/dashboard', '/admin/users', '/assistant', '/login'];
 
   const handleLogin = (email: string, role: UserRole) => {
     const newUser: User = {
@@ -65,10 +63,6 @@ function AppContent() {
     return <Navigate to="/" replace />;
   }
 
-  if (isSuperAdmin && !superAdminAllowedPaths.some(path => location.pathname === path || location.pathname.startsWith(`${path}/`))) {
-    return <Navigate to="/admin/dashboard" replace />;
-  }
-
   const getActivePage = () => {
     const path = location.pathname;
     if (path === '/') return 'home';
@@ -79,6 +73,7 @@ function AppContent() {
     if (path.startsWith('/leaderboard')) return 'leaderboard';
     if (path.startsWith('/assistant')) return 'assistant';
     if (path.startsWith('/help')) return 'help';
+    if (path.startsWith('/profile')) return 'profile';
     if (path.startsWith('/admin/dashboard')) return 'admin-dashboard';
     if (path.startsWith('/admin/content')) return 'content-management';
     if (path.startsWith('/admin/users')) return 'user-management';
@@ -127,14 +122,16 @@ function AppContent() {
             <Route path="/profile" element={<ProfilePage user={user!} />} />
             
             {/* Admin Routes */}
-            {user?.role === 'super-admin' && (
+            {(user?.role === 'super-admin') && (
               <>
                 <Route path="/admin/dashboard" element={<SuperAdminDashboard />} />
-                <Route path="/admin/users" element={<UserManagementPage />} />
               </>
             )}
             {(user?.role === 'super-admin' || user?.role === 'content-admin') && (
               <Route path="/admin/content" element={<ContentManagementPage />} />
+            )}
+            {(user?.role === 'super-admin' || user?.role === 'content-admin') && (
+              <Route path="/admin/users" element={<UserManagementPage />} />
             )}
 
             <Route path="*" element={<Navigate to="/" replace />} />

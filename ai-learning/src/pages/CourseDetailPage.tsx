@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { MOCK_COURSES } from '../constants';
 import type { Course } from '../types';
+import { getStoredCourseById, getStoredCourses } from '../lib/courseStore.ts';
 
 type ApiLesson = { id: number | string; titulo?: string; completada?: boolean; orden?: number };
 type ApiCourseDetail = {
@@ -42,7 +42,7 @@ const normalizeDetailCourse = (raw: ApiCourseDetail): Course => {
 export default function CourseDetailPage() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const fallbackCourse = useMemo(() => MOCK_COURSES.find((c) => String(c.id) === id) || MOCK_COURSES[0], [id]);
+  const fallbackCourse = useMemo(() => getStoredCourseById(id ?? '') || getStoredCourses()[0], [id]);
   const [course, setCourse] = useState<Course>(fallbackCourse);
   const [loading, setLoading] = useState(true);
 

@@ -1,36 +1,89 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-
-const MOCK_USERS = [
-  { id: '1', name: 'Admin GIT Labs', email: 'admin@whirlpool.com', area: 'Innovación', role: 'super-admin', status: 'Activo' },
-  { id: '2', name: 'Editor Contenido', email: 'editor@whirlpool.com', area: 'Recursos Humanos', role: 'content-admin', status: 'Activo' },
-  { id: '3', name: 'Juan Pérez', email: 'j.perez@whirlpool.com', area: 'Ingeniería', role: 'user', status: 'Activo' },
-  { id: '4', name: 'María García', email: 'm.garcia@whirlpool.com', area: 'Marketing', role: 'user', status: 'Activo' },
-  { id: '5', name: 'Roberto Garza', email: 'r.garza@whirlpool.com', area: 'Operaciones', role: 'user', status: 'Inactivo' },
-];
+import { addStoredTeamUser, deleteStoredTeamUser, getStoredTeamUsers, saveStoredTeamUsers, type TeamUser } from '../lib/userStore';
 
 export default function UserManagementPage() {
-  const [users, setUsers] = useState(MOCK_USERS);
+  const [users, setUsers] = useState<TeamUser[]>([]);
+  const [currentUserRole, setCurrentUserRole] = useState<TeamUser['role']>('user');
   const [showUserModal, setShowUserModal] = useState(false);
-  const [editingUser, setEditingUser] = useState<any>(null);
+  const [editingUser, setEditingUser] = useState<TeamUser | null>(null);
+  const [formUser, setFormUser] = useState<Omit<TeamUser, 'id'>>({
+    name: '',
+    email: '',
+    area: 'Ingeniería',
+    role: 'user',
+    status: 'Activo',
+  });
 
-  const handleOpenModal = (user?: any) => {
+  useEffect(() => {
+    setUsers(getStoredTeamUsers());
+    try {
+      const raw = localStorage.getItem('whirlpool_user');
+      if (raw) {
+        const parsed = JSON.parse(raw) as { role?: TeamUser['role'] };
+        setCurrentUserRole(parsed.role ?? 'user');
+      }
+    } catch {
+      setCurrentUserRole('user');
+    }
+  }, []);
+
+  const roleOptions: Array<{ value: TeamUser['role']; label: string }> = currentUserRole === 'super-admin'
+    ? [
+        { value: 'user', label: 'Usuario' },
+        { value: 'content-admin', label: 'Administrador de Contenido' },
+        { value: 'super-admin', label: 'Super Administrador' },
+      ]
+    : [
+        { value: 'user', label: 'Usuario' },
+      ];
+
+  const handleOpenModal = (user?: TeamUser) => {
     setEditingUser(user || null);
+    setFormUser(user ? { name: user.name, email: user.email, area: user.area, role: user.role, status: user.status } : {
+      name: '',
+      email: '',
+      area: 'Ingeniería',
+      role: 'user',
+      status: 'Activo',
+    });
     setShowUserModal(true);
+  };
+
+  const handleSaveUser = () => {
+    if (!formUser.name.trim() || !formUser.email.trim()) return;
+
+    if (editingUser) {
+      const nextUsers = users.map((user) => (user.id === editingUser.id ? { ...user, ...formUser } : user));
+      setUsers(nextUsers);
+      saveStoredTeamUsers(nextUsers);
+    } else {
+      const safeRole = currentUserRole === 'super-admin' ? formUser.role : 'user';
+      const newUser = addStoredTeamUser({ ...formUser, role: safeRole });
+      setUsers((current) => [newUser, ...current]);
+    }
+
+    setShowUserModal(false);
+  };
+
+  const handleDeleteUser = (userId: string) => {
+    if (!window.confirm('Quieres quitar a esta persona del equipo?')) return;
+    const nextUsers = deleteStoredTeamUser(userId);
+    setUsers(nextUsers);
   };
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-7xl mx-auto space-y-8">
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6">
         <div>
-          <h1 className="text-3xl font-black text-primary tracking-tight">Usuarios y Roles</h1>
-          <p className="text-slate-500 font-medium">Administra accesos y jerarquías de la plataforma Whirlpool AI.</p>
+          <h1 className="text-3xl font-black text-primary tracking-tight">Equipo y Roles</h1>
+          <p className="text-slate-500 font-medium">Administra personas, accesos y jerarquías de tu equipo en Whirlpool AI.</p>
         </div>
         <button 
           onClick={() => handleOpenModal()}
           className="w-full lg:w-auto px-6 py-3 bg-primary text-white font-bold rounded-2xl shadow-lg shadow-primary/20 hover:scale-105 transition-all flex items-center justify-center gap-2"
         >
-          <span className="material-symbols-outlined">person_add</span> Invitar Usuario
+          <span className="material-symbols-outlined">person_add</span> {currentUserRole === 'super-admin' ? 'Invitar Administrador' : 'Agregar Persona'}
         </button>
       </header>
 
@@ -105,7 +158,7 @@ export default function UserManagementPage() {
                       <button className="p-2 text-slate-400 hover:text-primary transition-colors">
                         <span className="material-symbols-outlined text-sm">key</span>
                       </button>
-                      <button className="p-2 text-slate-400 hover:text-red-500 transition-colors">
+                      <button onClick={() => handleDeleteUser(user.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors">
                         <span className="material-symbols-outlined text-sm">block</span>
                       </button>
                     </div>
@@ -147,7 +200,8 @@ export default function UserManagementPage() {
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nombre Completo</label>
                   <input 
                     type="text" 
-                    defaultValue={editingUser?.name}
+                    value={formUser.name}
+                    onChange={(event) => setFormUser((current) => ({ ...current, name: event.target.value }))}
                     className="w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium" 
                     placeholder="Ej. Juan Pérez" 
                   />
@@ -156,7 +210,8 @@ export default function UserManagementPage() {
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Correo Electrónico</label>
                   <input 
                     type="email" 
-                    defaultValue={editingUser?.email}
+                    value={formUser.email}
+                    onChange={(event) => setFormUser((current) => ({ ...current, email: event.target.value }))}
                     className="w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium" 
                     placeholder="usuario@whirlpool.com" 
                   />
@@ -165,7 +220,8 @@ export default function UserManagementPage() {
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Área</label>
                     <select 
-                      defaultValue={editingUser?.area || 'Ingeniería'}
+                      value={formUser.area}
+                      onChange={(event) => setFormUser((current) => ({ ...current, area: event.target.value }))}
                       className="w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium"
                     >
                       <option>Ingeniería</option>
@@ -178,19 +234,23 @@ export default function UserManagementPage() {
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Rol</label>
                     <select 
-                      defaultValue={editingUser?.role || 'user'}
+                      value={formUser.role}
+                      onChange={(event) => setFormUser((current) => ({ ...current, role: event.target.value as TeamUser['role'] }))}
                       className="w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium"
                     >
-                      <option value="user">Usuario</option>
-                      <option value="content-admin">Editor de Contenido</option>
-                      <option value="super-admin">Administrador</option>
+                      {roleOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Estado</label>
                   <select 
-                    defaultValue={editingUser?.status || 'Activo'}
+                    value={formUser.status}
+                    onChange={(event) => setFormUser((current) => ({ ...current, status: event.target.value as TeamUser['status'] }))}
                     className="w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium"
                   >
                     <option>Activo</option>
@@ -200,7 +260,7 @@ export default function UserManagementPage() {
               </div>
               <div className="p-8 bg-slate-50 flex justify-end gap-4">
                 <button onClick={() => setShowUserModal(false)} className="px-6 py-3 font-bold text-slate-500 hover:text-on-surface transition-colors">Cancelar</button>
-                <button className="px-8 py-3 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/20 hover:scale-105 transition-all">
+                <button onClick={handleSaveUser} className="px-8 py-3 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/20 hover:scale-105 transition-all">
                   {editingUser ? 'Guardar Cambios' : 'Enviar Invitación'}
                 </button>
               </div>

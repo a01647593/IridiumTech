@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { MOCK_COURSES } from '../constants';
 import type { Course } from '../types';
+import { getStoredCourseById, getStoredCourses } from '../lib/courseStore.ts';
 
 type ApiContent = { id: number | string; tipo?: 'pdf' | 'slides' | 'sheets' | 'video'; titulo?: string; contenidoURLoTexto?: string };
 type ApiLesson = { id: number | string; titulo?: string; orden?: number; Contenido?: ApiContent[]; completada?: boolean };
@@ -62,7 +62,7 @@ export default function LessonPage() {
   const courseId = searchParams.get('courseId') || '1';
   const moduleId = searchParams.get('moduleId');
   const [course, setCourse] = useState<Course>(
-    MOCK_COURSES.find((c) => String(c.id) === courseId) || MOCK_COURSES[0]
+    getStoredCourseById(courseId) || getStoredCourses()[0]
   );
   const [loading, setLoading] = useState(true);
   const [commentInput, setCommentInput] = useState('');
@@ -81,7 +81,7 @@ export default function LessonPage() {
         }
       } catch {
         if (mounted) {
-          setCourse(MOCK_COURSES.find((c) => String(c.id) === courseId) || MOCK_COURSES[0]);
+          setCourse(getStoredCourseById(courseId) || getStoredCourses()[0]);
         }
       } finally {
         if (mounted) setLoading(false);

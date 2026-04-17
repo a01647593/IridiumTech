@@ -12,23 +12,31 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ activePage, user, onLogout, isOpen, onClose }: SidebarProps) {
-  const navItems = user.role === 'super-admin'
-    ? [
-        { id: 'admin-dashboard', label: 'Global Analytics', icon: 'analytics', path: '/admin/dashboard', roles: ['super-admin'] },
-        { id: 'user-management', label: 'Usuarios y Roles', icon: 'manage_accounts', path: '/admin/users', roles: ['super-admin'] },
-        { id: 'assistant', label: 'Asistente IA', icon: 'smart_toy', path: '/assistant', roles: ['super-admin'] },
-      ]
-    : [
+  const commonNavItems = [
     { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', path: '/dashboard', roles: ['user', 'content-admin', 'super-admin'] },
     { id: 'courses', label: 'Cursos', icon: 'school', path: '/courses', roles: ['user', 'content-admin', 'super-admin'] },
     { id: 'prompts', label: 'Biblioteca de Gemas', icon: 'auto_awesome', path: '/prompts', roles: ['user', 'content-admin', 'super-admin'] },
     { id: 'leaderboard', label: 'Leaderboard', icon: 'leaderboard', path: '/leaderboard', roles: ['user', 'content-admin', 'super-admin'] },
     { id: 'assistant', label: 'Asistente IA', icon: 'smart_toy', path: '/assistant', roles: ['user', 'content-admin', 'super-admin'] },
     { id: 'help', label: 'Ayuda & FAQ', icon: 'help', path: '/help', roles: ['user', 'content-admin', 'super-admin'] },
+  ];
+
+  const adminNavItems = [
     { id: 'admin-dashboard', label: 'Global Analytics', icon: 'analytics', path: '/admin/dashboard', roles: ['super-admin'] },
     { id: 'content-management', label: 'Gestión de Contenido', icon: 'edit_note', path: '/admin/content', roles: ['super-admin', 'content-admin'] },
-    { id: 'user-management', label: 'Usuarios y Roles', icon: 'manage_accounts', path: '/admin/users', roles: ['super-admin'] },
-    ];
+    { id: 'user-management', label: 'Equipo y Roles', icon: 'manage_accounts', path: '/admin/users', roles: ['super-admin', 'content-admin'] },
+  ];
+
+  const superAdminOnlyNavItems = [
+    { id: 'home', label: 'Inicio', icon: 'home', path: '/', roles: ['super-admin'] },
+    { id: 'profile', label: 'Mi Perfil', icon: 'person', path: '/profile', roles: ['super-admin'] },
+  ];
+
+  const navItems = user.role === 'super-admin'
+    ? [...superAdminOnlyNavItems, ...commonNavItems, ...adminNavItems]
+    : user.role === 'content-admin'
+      ? [...commonNavItems, ...adminNavItems.filter((item) => item.roles.includes('content-admin'))]
+      : commonNavItems;
 
   const filteredItems = navItems.filter(item => item.roles.includes(user.role));
 

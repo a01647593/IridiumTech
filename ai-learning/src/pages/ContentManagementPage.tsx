@@ -1,11 +1,40 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { MOCK_COURSES, MOCK_PROMPTS } from '../constants';
+import { MOCK_PROMPTS } from '../constants';
+import { addStoredCourse, deleteStoredCourse, getStoredCourses, type CourseDraft } from '../lib/courseStore';
+import type { Course } from '../types';
 
 export default function ContentManagementPage() {
   const [showCourseModal, setShowCourseModal] = useState(false);
   const [showGemaModal, setShowGemaModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'courses' | 'gemas'>('courses');
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [courseDraft, setCourseDraft] = useState<CourseDraft>({
+    title: '',
+    description: '',
+    area: 'Ingeniería',
+    level: 'Intermedio',
+    duration: '2h 00m',
+    thumbnail: '',
+  });
+
+  useEffect(() => {
+    setCourses(getStoredCourses());
+  }, []);
+
+  const handleDeleteCourse = (courseId: string) => {
+    if (!window.confirm('Quieres eliminar este curso?')) return;
+    const nextCourses = deleteStoredCourse(courseId);
+    setCourses(nextCourses);
+  };
+
+  const handleCreateCourse = () => {
+    if (!courseDraft.title.trim() || !courseDraft.description.trim()) return;
+    const createdCourse = addStoredCourse(courseDraft);
+    setCourses((current) => [createdCourse, ...current]);
+    setShowCourseModal(false);
+    setCourseDraft({ title: '', description: '', area: 'Ingeniería', level: 'Intermedio', duration: '2h 00m', thumbnail: '' });
+  };
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-7xl mx-auto space-y-8">
@@ -67,7 +96,7 @@ export default function ContentManagementPage() {
             </div>
             <div className="divide-y divide-slate-50">
               {activeTab === 'courses' ? (
-                MOCK_COURSES.map(course => (
+                courses.map(course => (
                   <div key={course.id} className="p-6 flex items-center gap-6 hover:bg-slate-50 transition-colors group">
                     <img src={course.thumbnail} alt="" className="w-16 h-16 rounded-xl object-cover" />
                     <div className="flex-1 min-w-0">
@@ -83,7 +112,7 @@ export default function ContentManagementPage() {
                         <button className="p-2 text-slate-400 hover:text-primary transition-colors">
                           <span className="material-symbols-outlined text-sm">edit</span>
                         </button>
-                        <button className="p-2 text-slate-400 hover:text-red-500 transition-colors">
+                        <button onClick={() => handleDeleteCourse(String(course.id))} className="p-2 text-slate-400 hover:text-red-500 transition-colors">
                           <span className="material-symbols-outlined text-sm">delete</span>
                         </button>
                       </div>
@@ -185,12 +214,22 @@ export default function ContentManagementPage() {
               <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto no-scrollbar">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Título del Curso</label>
-                  <input type="text" className="w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium" placeholder="Ej. Introducción a Gemini en Manufactura" />
+                  <input
+                    type="text"
+                    value={courseDraft.title}
+                    onChange={(event) => setCourseDraft((current) => ({ ...current, title: event.target.value }))}
+                    className="w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium"
+                    placeholder="Ej. Introducción a Gemini en Manufactura"
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Área</label>
-                    <select className="w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium">
+                    <select
+                      value={courseDraft.area}
+                      onChange={(event) => setCourseDraft((current) => ({ ...current, area: event.target.value }))}
+                      className="w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium"
+                    >
                       <option>Ingeniería</option>
                       <option>Marketing</option>
                       <option>HR</option>
@@ -200,7 +239,11 @@ export default function ContentManagementPage() {
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nivel</label>
-                    <select className="w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium">
+                    <select
+                      value={courseDraft.level}
+                      onChange={(event) => setCourseDraft((current) => ({ ...current, level: event.target.value as CourseDraft['level'] }))}
+                      className="w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium"
+                    >
                       <option>Básico</option>
                       <option>Intermedio</option>
                       <option>Avanzado</option>
@@ -209,7 +252,12 @@ export default function ContentManagementPage() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Descripción</label>
-                  <textarea className="w-full p-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium h-32 resize-none" placeholder="Describe los objetivos del curso..."></textarea>
+                  <textarea
+                    value={courseDraft.description}
+                    onChange={(event) => setCourseDraft((current) => ({ ...current, description: event.target.value }))}
+                    className="w-full p-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium h-32 resize-none"
+                    placeholder="Describe los objetivos del curso..."
+                  />
                 </div>
                 <div className="space-y-4">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Material del Curso</label>
@@ -231,11 +279,18 @@ export default function ContentManagementPage() {
                   <span className="material-symbols-outlined text-slate-300 text-4xl">image</span>
                   <p className="text-sm font-bold text-slate-500">Sube una miniatura para el curso</p>
                   <p className="text-[10px] text-slate-400 uppercase tracking-widest">JPG, PNG hasta 2MB</p>
+                  <input
+                    type="text"
+                    value={courseDraft.thumbnail}
+                    onChange={(event) => setCourseDraft((current) => ({ ...current, thumbnail: event.target.value }))}
+                    className="mt-4 w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium text-sm"
+                    placeholder="URL de miniatura opcional"
+                  />
                 </div>
               </div>
               <div className="p-8 bg-slate-50 flex justify-end gap-4">
                 <button onClick={() => setShowCourseModal(false)} className="px-6 py-3 font-bold text-slate-500 hover:text-on-surface transition-colors">Cancelar</button>
-                <button className="px-8 py-3 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/20 hover:scale-105 transition-all">Crear Curso</button>
+                <button onClick={handleCreateCourse} className="px-8 py-3 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/20 hover:scale-105 transition-all">Crear Curso</button>
               </div>
             </motion.div>
           </div>

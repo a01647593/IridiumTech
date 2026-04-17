@@ -1,63 +1,26 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { MOCK_COURSES } from '../constants';
 import type { Course } from '../types';
-
-type ApiCourse = {
-  id: number | string;
-  titulo?: string;
-  descripcion?: string;
-  progreso?: { porcentaje?: number };
-};
-
-const normalizeApiCourse = (raw: ApiCourse): Course => ({
-  id: String(raw.id),
-  title: raw.titulo ?? 'Curso sin titulo',
-  description: raw.descripcion ?? 'Descripcion no disponible',
-  thumbnail: 'https://picsum.photos/seed/course-api/600/400',
-  category: 'General',
-  area: 'General',
-  progress: raw.progreso?.porcentaje ?? 0,
-  duration: '2h 00m',
-  level: 'Intermedio',
-  externalLinks: [],
-  modules: [],
-});
+import { getStoredCourses } from '../lib/courseStore';
 
 export default function CourseCatalogPage() {
   const navigate = useNavigate();
-  const [courses, setCourses] = useState<Course[]>(MOCK_COURSES);
+  const [courses, setCourses] = useState<Course[]>(() => getStoredCourses());
   const [loading, setLoading] = useState(true);
   const [selectedArea, setSelectedArea] = useState('Todas');
   const [selectedLevel, setSelectedLevel] = useState('Todos');
 
   useEffect(() => {
-    let mounted = true;
+    setCourses(getStoredCourses());
+    setLoading(false);
 
-    const loadCourses = async () => {
-      try {
-        const response = await fetch('/api/courses');
-        if (!response.ok) throw new Error('No se pudieron cargar cursos');
-        const payload = await response.json();
-        const list = Array.isArray(payload) ? payload : [];
-        if (!mounted) return;
-        if (list.length > 0) {
-          setCourses(list.map(normalizeApiCourse));
-        } else {
-          setCourses(MOCK_COURSES);
-        }
-      } catch {
-        if (mounted) setCourses(MOCK_COURSES);
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
+    const syncCourses = () => setCourses(getStoredCourses());
 
-    loadCourses();
+    window.addEventListener('storage', syncCourses);
 
     return () => {
-      mounted = false;
+      window.removeEventListener('storage', syncCourses);
     };
   }, []);
 

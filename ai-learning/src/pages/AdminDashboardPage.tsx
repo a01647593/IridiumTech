@@ -16,7 +16,7 @@ export default function AdminDashboardPage() {
         </div>
         <div className="flex gap-3 w-full sm:w-auto">
           <button onClick={() => navigate('/admin/users')} className="flex-1 sm:flex-none px-6 py-3 bg-white text-primary border border-slate-200 rounded-xl font-bold shadow-sm hover:bg-slate-50 transition-all">Gestionar Usuarios</button>
-          <button onClick={() => navigate('/admin/create-course')} className="flex-1 sm:flex-none px-6 py-3 bg-primary text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all">Nuevo Curso</button>
+          <button onClick={() => navigate('/admin/content')} className="flex-1 sm:flex-none px-6 py-3 bg-primary text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all">Gestión de Contenido</button>
         </div>
       </header>
 
