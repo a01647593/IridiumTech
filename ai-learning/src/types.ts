@@ -55,12 +55,36 @@ export interface Course {
     url: string;
     label: string;
   }[];
-  modules: {
-    id: string;
-    title: string;
-    completed: boolean;
-    duration: string;
-  }[];
+  modules: CourseModule[];
+}
+
+export interface CourseModuleResource {
+  id: string;
+  type: 'pdf' | 'video';
+  label: string;
+  url: string;
+}
+
+export interface CourseModuleQuizQuestion {
+  id: string;
+  question: string;
+  options: string[];
+  correctAnswer: number;
+}
+
+export interface CourseModuleQuiz {
+  id: string;
+  title: string;
+  questions: CourseModuleQuizQuestion[];
+}
+
+export interface CourseModule {
+  id: string;
+  title: string;
+  completed: boolean;
+  duration: string;
+  resources?: CourseModuleResource[];
+  quiz?: CourseModuleQuiz;
 }
 
 export interface Prompt {

@@ -1,21 +1,29 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MOCK_PROMPTS } from '../constants';
-import { addStoredCourse, deleteStoredCourse, getStoredCourses, type CourseDraft } from '../lib/courseStore';
+import { addStoredCourse, createDefaultQuizTemplate, deleteStoredCourse, getStoredCourses, type CourseDraft, updateStoredCourse } from '../lib/courseStore';
 import type { Course } from '../types';
 
 export default function ContentManagementPage() {
   const [showCourseModal, setShowCourseModal] = useState(false);
   const [showGemaModal, setShowGemaModal] = useState(false);
+  const [showEditCourseModal, setShowEditCourseModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'courses' | 'gemas'>('courses');
   const [courses, setCourses] = useState<Course[]>([]);
+  const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [courseDraft, setCourseDraft] = useState<CourseDraft>({
     title: '',
     description: '',
     area: 'Ingeniería',
     level: 'Intermedio',
-    duration: '2h 00m',
     thumbnail: '',
+  });
+  const [moduleDraft, setModuleDraft] = useState({
+    title: '',
+    duration: '45m',
+    pdfUrl: '',
+    videoUrl: '',
+    addQuiz: true,
   });
 
   useEffect(() => {
@@ -33,7 +41,199 @@ export default function ContentManagementPage() {
     const createdCourse = addStoredCourse(courseDraft);
     setCourses((current) => [createdCourse, ...current]);
     setShowCourseModal(false);
-    setCourseDraft({ title: '', description: '', area: 'Ingeniería', level: 'Intermedio', duration: '2h 00m', thumbnail: '' });
+    setCourseDraft({ title: '', description: '', area: 'Ingeniería', level: 'Intermedio', thumbnail: '' });
+  };
+
+  const handleThumbnailUpload = (file?: File) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCourseDraft((current) => ({ ...current, thumbnail: String(reader.result ?? '') }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const openEditCourse = (course: Course) => {
+    setEditingCourse(course);
+    setModuleDraft({ title: '', duration: '45m', pdfUrl: '', videoUrl: '', addQuiz: true });
+    setShowEditCourseModal(true);
+  };
+
+  const persistEditedCourse = (nextCourse: Course) => {
+    setEditingCourse(nextCourse);
+    setCourses((current) => current.map((course) => (course.id === nextCourse.id ? nextCourse : course)));
+    updateStoredCourse(nextCourse.id, nextCourse);
+  };
+
+  const handleAddModule = () => {
+    if (!editingCourse || !moduleDraft.title.trim()) return;
+
+    const resources = [
+      moduleDraft.pdfUrl.trim()
+        ? { id: `pdf-${Date.now()}`, type: 'pdf' as const, label: 'Material PDF', url: moduleDraft.pdfUrl.trim() }
+        : null,
+      moduleDraft.videoUrl.trim()
+        ? { id: `video-${Date.now()}`, type: 'video' as const, label: 'Video del módulo', url: moduleDraft.videoUrl.trim() }
+        : null,
+    ].filter(Boolean) as Array<{ id: string; type: 'pdf' | 'video'; label: string; url: string }>;
+
+    const newModule = {
+      id: `m-${Date.now()}`,
+      title: moduleDraft.title.trim(),
+      completed: false,
+      duration: moduleDraft.duration.trim() || '45m',
+      resources,
+      quiz: moduleDraft.addQuiz ? createDefaultQuizTemplate(moduleDraft.title.trim()) : undefined,
+    };
+
+    const nextCourse = { ...editingCourse, modules: [...editingCourse.modules, newModule] };
+    persistEditedCourse(nextCourse);
+    setModuleDraft({ title: '', duration: '45m', pdfUrl: '', videoUrl: '', addQuiz: true });
+  };
+
+  const handleDeleteModule = (moduleId: string) => {
+    if (!editingCourse) return;
+    const nextCourse = { ...editingCourse, modules: editingCourse.modules.filter((module) => module.id !== moduleId) };
+    persistEditedCourse(nextCourse);
+  };
+
+  const handleAttachDefaultQuiz = (moduleId: string) => {
+    if (!editingCourse) return;
+    const nextCourse = {
+      ...editingCourse,
+      modules: editingCourse.modules.map((module) =>
+        module.id === moduleId ? { ...module, quiz: createDefaultQuizTemplate(module.title) } : module
+      ),
+    };
+    persistEditedCourse(nextCourse);
+  };
+
+  const handleRemoveQuiz = (moduleId: string) => {
+    if (!editingCourse) return;
+    const nextCourse = {
+      ...editingCourse,
+      modules: editingCourse.modules.map((module) =>
+        module.id === moduleId ? { ...module, quiz: undefined } : module
+      ),
+    };
+    persistEditedCourse(nextCourse);
+  };
+
+  const handleQuizTitleChange = (moduleId: string, title: string) => {
+    if (!editingCourse) return;
+    const nextCourse = {
+      ...editingCourse,
+      modules: editingCourse.modules.map((module) => {
+        if (module.id !== moduleId || !module.quiz) return module;
+        return { ...module, quiz: { ...module.quiz, title } };
+      }),
+    };
+    persistEditedCourse(nextCourse);
+  };
+
+  const handleQuizQuestionChange = (moduleId: string, questionId: string, question: string) => {
+    if (!editingCourse) return;
+    const nextCourse = {
+      ...editingCourse,
+      modules: editingCourse.modules.map((module) => {
+        if (module.id !== moduleId || !module.quiz) return module;
+        return {
+          ...module,
+          quiz: {
+            ...module.quiz,
+            questions: module.quiz.questions.map((item) =>
+              item.id === questionId ? { ...item, question } : item
+            ),
+          },
+        };
+      }),
+    };
+    persistEditedCourse(nextCourse);
+  };
+
+  const handleQuizOptionChange = (moduleId: string, questionId: string, optionIndex: number, value: string) => {
+    if (!editingCourse) return;
+    const nextCourse = {
+      ...editingCourse,
+      modules: editingCourse.modules.map((module) => {
+        if (module.id !== moduleId || !module.quiz) return module;
+        return {
+          ...module,
+          quiz: {
+            ...module.quiz,
+            questions: module.quiz.questions.map((item) => {
+              if (item.id !== questionId) return item;
+              const nextOptions = [...item.options];
+              nextOptions[optionIndex] = value;
+              return { ...item, options: nextOptions };
+            }),
+          },
+        };
+      }),
+    };
+    persistEditedCourse(nextCourse);
+  };
+
+  const handleQuizCorrectAnswerChange = (moduleId: string, questionId: string, optionIndex: number) => {
+    if (!editingCourse) return;
+    const nextCourse = {
+      ...editingCourse,
+      modules: editingCourse.modules.map((module) => {
+        if (module.id !== moduleId || !module.quiz) return module;
+        return {
+          ...module,
+          quiz: {
+            ...module.quiz,
+            questions: module.quiz.questions.map((item) =>
+              item.id === questionId ? { ...item, correctAnswer: optionIndex } : item
+            ),
+          },
+        };
+      }),
+    };
+    persistEditedCourse(nextCourse);
+  };
+
+  const handleAddQuizQuestion = (moduleId: string) => {
+    if (!editingCourse) return;
+    const nextCourse = {
+      ...editingCourse,
+      modules: editingCourse.modules.map((module) => {
+        if (module.id !== moduleId || !module.quiz) return module;
+        const newQuestion = {
+          id: `q-${Date.now()}`,
+          question: `Pregunta ${module.quiz.questions.length + 1}`,
+          options: ['Opción 1', 'Opción 2', 'Opción 3', 'Opción 4'],
+          correctAnswer: 0,
+        };
+        return {
+          ...module,
+          quiz: {
+            ...module.quiz,
+            questions: [...module.quiz.questions, newQuestion],
+          },
+        };
+      }),
+    };
+    persistEditedCourse(nextCourse);
+  };
+
+  const handleRemoveQuizQuestion = (moduleId: string, questionId: string) => {
+    if (!editingCourse) return;
+    const nextCourse = {
+      ...editingCourse,
+      modules: editingCourse.modules.map((module) => {
+        if (module.id !== moduleId || !module.quiz) return module;
+        return {
+          ...module,
+          quiz: {
+            ...module.quiz,
+            questions: module.quiz.questions.filter((item) => item.id !== questionId),
+          },
+        };
+      }),
+    };
+    persistEditedCourse(nextCourse);
   };
 
   return (
@@ -109,7 +309,7 @@ export default function ContentManagementPage() {
                         <span className="text-xs font-bold text-green-600">Publicado</span>
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button className="p-2 text-slate-400 hover:text-primary transition-colors">
+                        <button onClick={() => openEditCourse(course)} className="p-2 text-slate-400 hover:text-primary transition-colors">
                           <span className="material-symbols-outlined text-sm">edit</span>
                         </button>
                         <button onClick={() => handleDeleteCourse(String(course.id))} className="p-2 text-slate-400 hover:text-red-500 transition-colors">
@@ -259,25 +459,9 @@ export default function ContentManagementPage() {
                     placeholder="Describe los objetivos del curso..."
                   />
                 </div>
-                <div className="space-y-4">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Material del Curso</label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <button className="flex flex-col items-center gap-3 p-6 bg-slate-50 border-2 border-transparent hover:border-primary rounded-2xl transition-all group">
-                      <span className="material-symbols-outlined text-slate-400 group-hover:text-primary">picture_as_pdf</span>
-                      <span className="text-sm font-bold text-slate-600 group-hover:text-on-surface">Subir PDF</span>
-                    </button>
-                    <button className="flex flex-col items-center gap-3 p-6 bg-slate-50 border-2 border-transparent hover:border-primary rounded-2xl transition-all group">
-                      <span className="material-symbols-outlined text-slate-400 group-hover:text-primary">video_library</span>
-                      <span className="text-sm font-bold text-slate-600 group-hover:text-on-surface">Enlace Video</span>
-                    </button>
-                  </div>
-                  <div className="space-y-2">
-                    <input type="text" className="w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium text-sm" placeholder="URL del recurso (Drive, YouTube, etc.)" />
-                  </div>
-                </div>
                 <div className="p-6 border-2 border-dashed border-slate-200 rounded-2xl text-center space-y-2">
                   <span className="material-symbols-outlined text-slate-300 text-4xl">image</span>
-                  <p className="text-sm font-bold text-slate-500">Sube una miniatura para el curso</p>
+                  <p className="text-sm font-bold text-slate-500">Miniatura del curso (URL o archivo)</p>
                   <p className="text-[10px] text-slate-400 uppercase tracking-widest">JPG, PNG hasta 2MB</p>
                   <input
                     type="text"
@@ -286,6 +470,16 @@ export default function ContentManagementPage() {
                     className="mt-4 w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium text-sm"
                     placeholder="URL de miniatura opcional"
                   />
+                  <label className="inline-flex mt-2 items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-600 cursor-pointer hover:bg-slate-50">
+                    <span className="material-symbols-outlined text-sm">upload</span>
+                    Subir miniatura
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(event) => handleThumbnailUpload(event.target.files?.[0])}
+                    />
+                  </label>
                 </div>
               </div>
               <div className="p-8 bg-slate-50 flex justify-end gap-4">
@@ -346,6 +540,232 @@ export default function ContentManagementPage() {
               <div className="p-8 bg-slate-50 flex justify-end gap-4">
                 <button onClick={() => setShowGemaModal(false)} className="px-6 py-3 font-bold text-slate-500 hover:text-on-surface transition-colors">Cancelar</button>
                 <button className="px-8 py-3 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/20 hover:scale-105 transition-all">Publicar Gema</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {showEditCourseModal && editingCourse && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowEditCourseModal(false)}
+              className="absolute inset-0 bg-on-surface/40 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative bg-white w-full max-w-5xl rounded-[2.5rem] shadow-2xl overflow-hidden"
+            >
+              <div className="p-8 border-b border-slate-50 flex justify-between items-center">
+                <div>
+                  <h2 className="text-2xl font-black text-on-surface">Editar Curso</h2>
+                  <p className="text-sm text-slate-500 mt-1">
+                    {editingCourse.title} • {editingCourse.area} • {editingCourse.level}
+                  </p>
+                </div>
+                <button onClick={() => setShowEditCourseModal(false)} className="text-slate-400 hover:text-primary transition-colors">
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+
+              <div className="p-8 max-h-[70vh] overflow-y-auto no-scrollbar space-y-8">
+                <div className="space-y-4">
+                  <h3 className="text-lg font-bold text-on-surface">Módulos del curso</h3>
+                  {editingCourse.modules.length === 0 && (
+                    <div className="p-6 rounded-2xl bg-slate-50 text-sm text-slate-500">
+                      Este curso aún no tiene módulos. Agrega el primero abajo.
+                    </div>
+                  )}
+                  {editingCourse.modules.map((module) => (
+                    <div key={module.id} className="p-5 rounded-2xl border border-slate-200 bg-white space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="font-bold text-on-surface">{module.title}</p>
+                          <p className="text-xs text-slate-500">
+                            {module.duration} • {(module.resources?.length ?? 0)} recurso(s) • {module.quiz ? 'Quiz activo' : 'Sin quiz'}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          {!module.quiz ? (
+                            <button
+                              onClick={() => handleAttachDefaultQuiz(module.id)}
+                              className="px-3 py-2 text-xs font-bold rounded-xl bg-primary/10 text-primary hover:bg-primary/20"
+                            >
+                              Agregar Quiz
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleRemoveQuiz(module.id)}
+                              className="px-3 py-2 text-xs font-bold rounded-xl bg-amber-100 text-amber-700 hover:bg-amber-200"
+                            >
+                              Quitar Quiz
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDeleteModule(module.id)}
+                            className="px-3 py-2 text-xs font-bold rounded-xl bg-red-100 text-red-600 hover:bg-red-200"
+                          >
+                            Eliminar módulo
+                          </button>
+                        </div>
+                      </div>
+                      {module.resources && module.resources.length > 0 && (
+                        <div className="grid sm:grid-cols-2 gap-2">
+                          {module.resources.map((resource) => (
+                            <a
+                              key={resource.id}
+                              href={resource.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-3 py-2 rounded-xl bg-slate-50 text-xs text-slate-600 font-medium hover:bg-slate-100"
+                            >
+                              {resource.type.toUpperCase()} • {resource.label}
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                      {module.quiz && (
+                        <div className="p-4 rounded-xl bg-blue-50 border border-blue-100 space-y-4">
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Título del Quiz</label>
+                            <input
+                              type="text"
+                              value={module.quiz.title}
+                              onChange={(event) => handleQuizTitleChange(module.id, event.target.value)}
+                              className="w-full h-10 px-3 rounded-lg bg-white text-sm text-slate-700"
+                            />
+                          </div>
+
+                          <div className="space-y-4">
+                            {module.quiz.questions.map((question, questionIndex) => (
+                              <div key={question.id} className="p-3 rounded-lg bg-white border border-blue-100 space-y-3">
+                                <div className="flex items-center justify-between gap-2">
+                                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                    Pregunta {questionIndex + 1}
+                                  </label>
+                                  <button
+                                    onClick={() => handleRemoveQuizQuestion(module.id, question.id)}
+                                    className="text-[10px] font-bold text-red-500 hover:text-red-700"
+                                  >
+                                    Eliminar
+                                  </button>
+                                </div>
+                                <input
+                                  type="text"
+                                  value={question.question}
+                                  onChange={(event) => handleQuizQuestionChange(module.id, question.id, event.target.value)}
+                                  className="w-full h-10 px-3 rounded-lg bg-slate-50 text-sm"
+                                  placeholder="Escribe la pregunta"
+                                />
+                                <div className="grid sm:grid-cols-2 gap-2">
+                                  {question.options.map((option, optionIndex) => (
+                                    <label key={`${question.id}-opt-${optionIndex}`} className="flex items-center gap-2 p-2 rounded-lg bg-slate-50">
+                                      <input
+                                        type="radio"
+                                        name={`correct-${module.id}-${question.id}`}
+                                        checked={question.correctAnswer === optionIndex}
+                                        onChange={() => handleQuizCorrectAnswerChange(module.id, question.id, optionIndex)}
+                                      />
+                                      <input
+                                        type="text"
+                                        value={option}
+                                        onChange={(event) => handleQuizOptionChange(module.id, question.id, optionIndex, event.target.value)}
+                                        className="flex-1 bg-transparent text-sm outline-none"
+                                        placeholder={`Opción ${optionIndex + 1}`}
+                                      />
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          <button
+                            onClick={() => handleAddQuizQuestion(module.id)}
+                            className="px-3 py-2 text-xs font-bold rounded-lg bg-white text-primary border border-primary/30 hover:bg-primary/5"
+                          >
+                            Agregar pregunta
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="space-y-4 border-t border-slate-100 pt-6">
+                  <h3 className="text-lg font-bold text-on-surface">Agregar Módulo</h3>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="space-y-2 sm:col-span-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Título del Módulo</label>
+                      <input
+                        type="text"
+                        value={moduleDraft.title}
+                        onChange={(event) => setModuleDraft((current) => ({ ...current, title: event.target.value }))}
+                        className="w-full h-12 px-4 bg-slate-50 rounded-xl"
+                        placeholder="Ej. Introducción a Prompt Engineering"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Duración</label>
+                      <input
+                        type="text"
+                        value={moduleDraft.duration}
+                        onChange={(event) => setModuleDraft((current) => ({ ...current, duration: event.target.value }))}
+                        className="w-full h-12 px-4 bg-slate-50 rounded-xl"
+                        placeholder="Ej. 45m"
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-600">
+                        <input
+                          type="checkbox"
+                          checked={moduleDraft.addQuiz}
+                          onChange={(event) => setModuleDraft((current) => ({ ...current, addQuiz: event.target.checked }))}
+                        />
+                        Agregar Quiz
+                      </label>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">URL PDF (opcional)</label>
+                      <input
+                        type="text"
+                        value={moduleDraft.pdfUrl}
+                        onChange={(event) => setModuleDraft((current) => ({ ...current, pdfUrl: event.target.value }))}
+                        className="w-full h-12 px-4 bg-slate-50 rounded-xl"
+                        placeholder="https://...pdf"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">URL Video (opcional)</label>
+                      <input
+                        type="text"
+                        value={moduleDraft.videoUrl}
+                        onChange={(event) => setModuleDraft((current) => ({ ...current, videoUrl: event.target.value }))}
+                        className="w-full h-12 px-4 bg-slate-50 rounded-xl"
+                        placeholder="https://...video"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleAddModule}
+                    className="px-6 py-3 bg-primary text-white text-sm font-bold rounded-xl shadow-lg shadow-primary/20 hover:scale-105 transition-all"
+                  >
+                    Agregar Módulo
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 bg-slate-50 flex justify-end">
+                <button
+                  onClick={() => setShowEditCourseModal(false)}
+                  className="px-6 py-3 bg-primary text-white text-sm font-bold rounded-xl shadow-lg shadow-primary/20 hover:scale-105 transition-all"
+                >
+                  Listo
+                </button>
               </div>
             </motion.div>
           </div>
