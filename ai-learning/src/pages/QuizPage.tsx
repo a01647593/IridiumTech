@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { MOCK_QUIZZES } from '../constants';
+import { getStoredCourseById } from '../lib/courseStore.ts';
 
 interface Option {
   id: number;
@@ -19,11 +20,11 @@ interface Question {
 }
 
 interface Leccion {
-  id: number;
+  id: string | number;
   titulo: string;
   orden: number;
   fechaLimite: string;
-  cursoId: number;
+  cursoId: string | number;
   cursoTitulo: string;
 }
 
@@ -62,6 +63,36 @@ const normalizeQuiz = (mockQuiz: any, moduleId: string): { leccion: Leccion; pre
       esCorrecta: optIdx === q.correctAnswer,
       explicacion: `Opción ${optIdx === q.correctAnswer ? 'correcta' : 'incorrecta'}`
     }))
+  }));
+
+  return { leccion, preguntas };
+};
+
+const normalizeStoredQuiz = (
+  quiz: { title: string; questions: Array<{ id: string; question: string; options: string[]; correctAnswer: number }> },
+  module: { id: string; title: string },
+  course: { id: string; title: string }
+): { leccion: Leccion; preguntas: Question[] } => {
+  const leccion: Leccion = {
+    id: module.id,
+    titulo: quiz.title || `Quiz - ${module.title}`,
+    orden: 1,
+    fechaLimite: '2026-12-31',
+    cursoId: course.id,
+    cursoTitulo: course.title,
+  };
+
+  const preguntas: Question[] = quiz.questions.map((question, idx) => ({
+    id: idx + 1,
+    texto: question.question,
+    orden: idx + 1,
+    opciones: question.options.slice(0, 4).map((option, optIdx) => ({
+      id: optIdx + 1,
+      preguntaId: idx + 1,
+      texto: option,
+      esCorrecta: optIdx === question.correctAnswer,
+      explicacion: `Opción ${optIdx === question.correctAnswer ? 'correcta' : 'incorrecta'}`,
+    })),
   }));
 
   return { leccion, preguntas };
@@ -154,6 +185,25 @@ export default function QuizPage() {
   useEffect(() => {
     const initializeQuiz = async () => {
       try {
+        // Prioridad 1: quiz creado en Gestión de Contenido para el módulo actual
+        if (courseId && leccionId) {
+          const storedCourse = getStoredCourseById(courseId);
+          const storedModule = storedCourse?.modules?.find((module) => String(module.id) === String(leccionId));
+
+          if (storedCourse && storedModule?.quiz && storedModule.quiz.questions.length > 0) {
+            const storedQuiz = normalizeStoredQuiz(
+              storedModule.quiz,
+              { id: String(storedModule.id), title: storedModule.title },
+              { id: String(storedCourse.id), title: storedCourse.title }
+            );
+            setLeccion(storedQuiz.leccion);
+            setQuestions(storedQuiz.preguntas);
+            setSesionId(null);
+            setLoading(false);
+            return;
+          }
+        }
+
         const userId = localStorage.getItem('userId');
         
         // Si no hay leccionId, usar mock quiz
@@ -196,26 +246,25 @@ export default function QuizPage() {
 
   // Cargar módulo siguiente
   useEffect(() => {
-    const fetchNextLeccion = async () => {
+    const fetchNextLeccion = () => {
       if (!leccion || !courseId) return;
-      
-      try {
-        // Obtener detalles del curso para encontrar el siguiente módulo
-        const res = await fetch(`/api/courses/${courseId}`);
-        if (!res.ok) throw new Error('Error al cargar el curso');
-        
-        const courseData = await res.json();
-        const lecciones = courseData.lecciones || [];
-        
-        // Buscar la lección siguiente (con orden mayor que la actual)
-        const sortedLecciones = [...lecciones].sort((a, b) => a.orden - b.orden);
-        const nextIdx = sortedLecciones.findIndex(l => l.id === leccion.id);
-        
-        if (nextIdx !== -1 && nextIdx < sortedLecciones.length - 1) {
-          setNextLeccion(sortedLecciones[nextIdx + 1]);
-        }
-      } catch (err) {
-        console.warn('No se pudo determinar el siguiente módulo:', err);
+
+      const storedCourse = getStoredCourseById(courseId);
+      const modules = storedCourse?.modules ?? [];
+      const currentIdx = modules.findIndex((module) => String(module.id) === String(leccion.id));
+
+      if (currentIdx !== -1 && currentIdx < modules.length - 1) {
+        const nextModule = modules[currentIdx + 1];
+        setNextLeccion({
+          id: nextModule.id,
+          titulo: nextModule.title,
+          orden: currentIdx + 2,
+          fechaLimite: '2026-12-31',
+          cursoId: courseId,
+          cursoTitulo: storedCourse?.title ?? '',
+        });
+      } else {
+        setNextLeccion(null);
       }
     };
     
@@ -396,7 +445,7 @@ export default function QuizPage() {
           <div className="flex flex-col sm:flex-row gap-4">
             {nextLeccion && (
               <button 
-                onClick={() => navigate(`/course/${courseId}/lesson/${nextLeccion.id}`)}
+                onClick={() => navigate(`/lesson?courseId=${courseId}&moduleId=${nextLeccion.id}`)}
                 className="flex-1 bg-accent-blue text-white py-4 rounded-2xl font-bold shadow-lg hover:scale-105 transition-all"
               >
                 Módulo Siguiente

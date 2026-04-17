@@ -155,9 +155,6 @@ export default function UserManagementPage() {
                       >
                         <span className="material-symbols-outlined text-sm">edit</span>
                       </button>
-                      <button className="p-2 text-slate-400 hover:text-primary transition-colors">
-                        <span className="material-symbols-outlined text-sm">key</span>
-                      </button>
                       <button onClick={() => handleDeleteUser(user.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors">
                         <span className="material-symbols-outlined text-sm">block</span>
                       </button>
