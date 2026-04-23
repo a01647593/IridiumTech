@@ -3,6 +3,15 @@ import { useState, type FormEvent } from 'react';
 import { UserRole } from '../types';
 import { findAuthAccount } from '../lib/authApi';
 import whirlpoolLogo from '../assets/logowhirlpoolblack.png';
+import { loginWithGoogle } from '../lib/auth'
+
+const handleGoogleLogin = async () => {
+  try {
+    await loginWithGoogle()
+  } catch (e: any) {
+    console.error(e.message)
+  }
+}
 
 interface LoginPageProps {
   onLogin: (email: string, role: UserRole) => void;
@@ -22,11 +31,6 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; credentials?: string }>({});
-
-  const handleSSOLogin = (role: UserRole) => {
-    const email = role === 'super-admin' ? 'super@whirlpool.com' : role === 'content-admin' ? 'editor@whirlpool.com' : 'empleado@whirlpool.com';
-    onLogin(email, role);
-  };
 
   const validateCredentials = () => {
     const nextErrors: { email?: string; password?: string; credentials?: string } = {};
@@ -201,7 +205,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             </div>
 
             <button 
-              onClick={() => handleSSOLogin('user')}
+              onClick={handleGoogleLogin}
               className="w-full py-4 bg-white border border-slate-200 text-slate-700 font-bold rounded-2xl hover:bg-slate-50 transition-all flex items-center justify-center gap-3 group"
             >
               <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
