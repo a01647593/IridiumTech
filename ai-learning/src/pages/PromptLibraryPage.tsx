@@ -1,9 +1,40 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useNavigate } from 'react-router-dom';
 import { MOCK_PROMPTS } from '../constants';
 
+interface PromptMetrics {
+  likes: number;
+  likedByMe: boolean;
+  views: number;
+}
+
+const getMetricsKey = (promptId: string) => `prompt_metrics_${promptId}`;
+
+const applyStoredMetrics = <T extends { id: string; likes: number; usageCount: number; likedByMe?: boolean }>(prompt: T): T => {
+  const rawMetrics = localStorage.getItem(getMetricsKey(prompt.id));
+  if (!rawMetrics) {
+    return prompt;
+  }
+
+  try {
+    const metrics = JSON.parse(rawMetrics) as Partial<PromptMetrics>;
+    return {
+      ...prompt,
+      likes: typeof metrics.likes === 'number' ? metrics.likes : prompt.likes,
+      usageCount: typeof metrics.views === 'number' ? metrics.views : prompt.usageCount,
+      likedByMe: typeof metrics.likedByMe === 'boolean' ? metrics.likedByMe : Boolean(prompt.likedByMe),
+    };
+  } catch {
+    return prompt;
+  }
+};
+
 export default function PromptLibraryPage() {
-  const [prompts, setPrompts] = useState(MOCK_PROMPTS.map(p => ({ ...p, likedByMe: false })));
+  const navigate = useNavigate();
+  const [prompts, setPrompts] = useState(
+    MOCK_PROMPTS.map((p) => applyStoredMetrics({ ...p, likedByMe: false })),
+  );
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Todas');
   const [showShareModal, setShowShareModal] = useState(false);
@@ -19,18 +50,36 @@ export default function PromptLibraryPage() {
   });
 
   const handleLike = (id: string) => {
-    setPrompts(prev => prev.map(p => {
-      if (p.id === id) {
+    setPrompts((prev) =>
+      prev.map((p) => {
+        if (p.id !== id) {
+          return p;
+        }
+
         const isLiked = !p.likedByMe;
-        return { 
-          ...p, 
-          likedByMe: isLiked, 
-          likes: isLiked ? p.likes + 1 : p.likes - 1 
+        const updatedPrompt = {
+          ...p,
+          likedByMe: isLiked,
+          likes: isLiked ? p.likes + 1 : Math.max(p.likes - 1, 0),
         };
-      }
-      return p;
-    }));
+
+        localStorage.setItem(
+          getMetricsKey(p.id),
+          JSON.stringify({
+            likes: updatedPrompt.likes,
+            likedByMe: updatedPrompt.likedByMe,
+            views: updatedPrompt.usageCount,
+          }),
+        );
+
+        return updatedPrompt;
+      }),
+    );
   };
+
+  useEffect(() => {
+    setPrompts((prev) => prev.map((p) => applyStoredMetrics(p)));
+  }, []);
 
   const handleShare = () => {
     if (newGema.title && newGema.description) {
@@ -45,6 +94,10 @@ export default function PromptLibraryPage() {
         impact: 'Nuevo',
         author: 'Usuario'
       };
+      localStorage.setItem(
+        getMetricsKey(gema.id),
+        JSON.stringify({ likes: gema.likes, likedByMe: false, views: gema.usageCount }),
+      );
       setPrompts([gema, ...prompts]);
       setShowShareModal(false);
       setNewGema({ title: '', description: '', category: 'Productividad', tags: '' });
@@ -154,7 +207,10 @@ export default function PromptLibraryPage() {
                   <span className="text-xs font-bold">{prompt.usageCount}</span>
                 </div>
               </div>
-              <button className="text-primary font-bold text-sm flex items-center gap-1 hover:underline whitespace-nowrap">
+              <button
+                onClick={() => navigate(`/prompts/${prompt.id}`, { state: { prompt } })}
+                className="text-primary font-bold text-sm flex items-center gap-1 hover:underline whitespace-nowrap"
+              >
                 Ver Gema <span className="material-symbols-outlined text-sm">arrow_forward</span>
               </button>
             </div>

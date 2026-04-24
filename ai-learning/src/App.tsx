@@ -15,6 +15,7 @@ import LeaderboardPage from './pages/LeaderboardPage';
 import LessonPage from './pages/LessonPage';
 import LoginPage from './pages/LoginPage';
 import ProfilePage from './pages/ProfilePage';
+import PromptDetailPage from './pages/PromptDetailPage';
 import PromptLibraryPage from './pages/PromptLibraryPage';
 import QuizPage from './pages/QuizPage';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
@@ -246,6 +247,7 @@ function AppContent() {
               <Route path="/lesson" element={<LessonPage />} />
               <Route path="/quiz" element={<QuizPage />} />
               <Route path="/prompts" element={<PromptLibraryPage />} />
+              <Route path="/prompts/:id" element={<PromptDetailPage />} />
               <Route path="/leaderboard" element={<LeaderboardPage />} />
               <Route path="/assistant" element={<AIAssistantPage />} />
               <Route path="/help" element={<KnowledgeBasePage />} />
