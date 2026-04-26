@@ -3,15 +3,8 @@ import { useState, type FormEvent } from 'react';
 import { UserRole } from '../types';
 import { findAuthAccount } from '../lib/authApi';
 import whirlpoolLogo from '../assets/logowhirlpoolblack.png';
-import { loginWithGoogle } from '../lib/auth'
-
-const handleGoogleLogin = async () => {
-  try {
-    await loginWithGoogle()
-  } catch (e: any) {
-    console.error(e.message)
-  }
-}
+import { loginWithGoogle } from '../lib/auth';
+import { isSupabaseConfigured } from '../lib/supabaseClient';
 
 interface LoginPageProps {
   onLogin: (email: string, role: UserRole) => void;
@@ -31,6 +24,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; credentials?: string }>({});
+  const [ssoError, setSsoError] = useState('');
 
   const validateCredentials = () => {
     const nextErrors: { email?: string; password?: string; credentials?: string } = {};
@@ -96,6 +90,22 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
 
         setErrors({ credentials: 'No se pudo conectar con el servicio de autenticación.' });
       });
+  };
+
+  const handleGoogleLogin = async () => {
+    setSsoError('');
+
+    if (!isSupabaseConfigured) {
+      setSsoError('Google SSO no esta configurado. Define VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en .env.local.');
+      return;
+    }
+
+    try {
+      await loginWithGoogle();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'No se pudo iniciar Google SSO.';
+      setSsoError(message);
+    }
   };
 
   return (
@@ -211,6 +221,12 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
               <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
               Continuar con Google SSO
             </button>
+
+            {ssoError && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 font-medium">
+                {ssoError}
+              </div>
+            )}
 
           </div>
 
