@@ -198,21 +198,12 @@ export default function PromptDetailPage() {
               <span className={`material-symbols-outlined text-lg ${metrics.likedByMe ? 'material-symbols-fill' : ''}`}>favorite</span>
               <span className="text-sm font-bold">{metrics.likes}</span>
             </button>
-
-            <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-slate-50 text-slate-500">
-              <span className="material-symbols-outlined text-lg">visibility</span>
-              <span className="text-sm font-bold">{metrics.views}</span>
-            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Autor</p>
               <p className="text-sm font-bold text-on-surface mt-2">{prompt.author}</p>
-            </div>
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Likes</p>
-              <p className="text-sm font-bold text-on-surface mt-2">{metrics.likes}</p>
             </div>
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Vistas</p>
