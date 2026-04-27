@@ -1,6 +1,7 @@
 export type UserRole = 'user' | 'content-admin' | 'super-admin';
 
 export interface User {
+  id: string;           // 👈 NUEVO: UUID que viene de Supabase auth
   email: string;
   role: UserRole;
   name: string;

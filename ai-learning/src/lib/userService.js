@@ -1,39 +1,43 @@
-import { query } from './db.js';
+// src/lib/userService.js
+import { getSupabase } from './db.js';
 
 export async function findUserByEmail(correo) {
-  const rows = await query(
-    `SELECT u.id, u.nombre, u.correo, u.passwordHash,
-            u.empleadoVerificado, r.nombre AS rolNombre
-     FROM Usuario u
-     JOIN Rol r ON r.id = u.rolId
-     WHERE u.correo = ? LIMIT 1`,
-    [correo]
-  );
-  return rows[0] || null;
+  const { data, error } = await getSupabase()
+    .from('Usuario')
+    .select('id, nombre, correo, passwordHash, empleadoVerificado, Rol(nombre)')
+    .eq('correo', correo)
+    .single();
+
+  if (error) return null;
+  return data ? { ...data, rolNombre: data.Rol?.nombre } : null;
 }
 
 export async function updateLastActivity(userId) {
-  await query(
-    'UPDATE Usuario SET ultimaActividad = NOW() WHERE id = ?',
-    [userId]
-  );
+  await getSupabase()
+    .from('Usuario')
+    .update({ ultimaActividad: new Date().toISOString() })
+    .eq('id', userId);
 }
 
 export async function getAllUsers() {
-  return query(
-    `SELECT u.id, u.nombre, u.correo, u.empleadoVerificado,
-            u.ultimaActividad, r.nombre AS rolNombre
-     FROM Usuario u JOIN Rol r ON r.id = u.rolId
-     ORDER BY u.id DESC`
-  );
+  const { data } = await getSupabase()
+    .from('Usuario')
+    .select('id, nombre, correo, empleadoVerificado, ultimaActividad, Rol(nombre)')
+    .order('id', { ascending: false });
+  return data ?? [];
 }
 
 export async function updateUserRole(userId, rolNombre) {
-  await query(
-    `UPDATE Usuario u
-     JOIN Rol r ON r.nombre = ?
-     SET u.rolId = r.id
-     WHERE u.id = ?`,
-    [rolNombre, userId]
-  );
+  const { data: rol } = await getSupabase()
+    .from('Rol')
+    .select('id')
+    .eq('nombre', rolNombre)
+    .single();
+
+  if (!rol) throw new Error('Rol no encontrado');
+
+  await getSupabase()
+    .from('Usuario')
+    .update({ rolId: rol.id })
+    .eq('id', userId);
 }

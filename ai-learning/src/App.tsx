@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Layout from './components/Layout';
 import { MOCK_BADGES } from './constants';
-import { getAuthAccountByEmail } from './lib/authApi';
 import { supabase } from './lib/supabaseClient';
 import AIAssistantPage from './pages/AIAssistantPage';
 import ContentManagementPage from './pages/ContentManagementPage';
@@ -14,6 +13,7 @@ import KnowledgeBasePage from './pages/KnowledgeBasePage';
 import LeaderboardPage from './pages/LeaderboardPage';
 import LessonPage from './pages/LessonPage';
 import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
 import PromptDetailPage from './pages/PromptDetailPage';
 import PromptLibraryPage from './pages/PromptLibraryPage';
@@ -21,6 +21,7 @@ import QuizPage from './pages/QuizPage';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
 import UserManagementPage from './pages/UserManagementPage';
 import type { User, UserRole } from './types';
+
 
 const USER_STORAGE_KEY = 'whirlpool_user';
 
@@ -32,68 +33,60 @@ const getDefaultRouteByRole = (role: UserRole) => {
 
 const normalizeRole = (value: unknown): UserRole | null => {
   if (typeof value !== 'string') return null;
-
   const normalized = value.trim().toLowerCase();
-
   if (normalized === 'super-admin' || normalized === 'superadministrador') return 'super-admin';
   if (normalized === 'content-admin' || normalized === 'admin' || normalized === 'administrador') return 'content-admin';
   if (normalized === 'user' || normalized === 'usuario') return 'user';
-
   return null;
 };
 
-const buildLocalUser = (
+const buildUser = (
+  id: string,
   email: string,
   role: UserRole,
   overrides: Partial<Pick<User, 'name' | 'avatar' | 'area'>> = {},
 ): User => ({
+  id,
   email,
   role,
-  name: overrides.name ?? (role === 'super-admin' ? 'Admin GIT Labs' : role === 'content-admin' ? 'Editor Contenido' : 'Juan Pérez'),
+  name: overrides.name ?? (role === 'super-admin' ? 'Admin GIT Labs' : role === 'content-admin' ? 'Editor Contenido' : 'Empleado'),
   avatar: overrides.avatar ?? `https://picsum.photos/seed/${email}/100/100`,
   area: overrides.area ?? (role === 'super-admin' ? 'Innovación' : role === 'content-admin' ? 'HR' : 'Ingeniería'),
   gender: 'M',
-  score: 850,
-  badges: MOCK_BADGES.slice(0, 3),
-  completedCourses: ['3'],
-  pendingCourses: ['1', '4'],
-  streak: 3,
-  completedQuizzesCount: 5,
-  savedPrompts: ['1', '2'],
+  score: 0,
+  badges: [],
+  completedCourses: [],
+  pendingCourses: [],
+  streak: 0,
+  completedQuizzesCount: 0,
+  savedPrompts: [],
 });
 
 const buildUserFromSupabase = (authUser: {
+  id: string;
   email?: string | null;
   user_metadata?: Record<string, unknown>;
   app_metadata?: Record<string, unknown>;
-}) => {
+}): User => {
   const email = authUser.email?.trim().toLowerCase() ?? '';
-  const authAccount = email ? getAuthAccountByEmail(email) : null;
   const metadata = {
     ...(authUser.app_metadata ?? {}),
     ...(authUser.user_metadata ?? {}),
   };
 
-  const role =
-    normalizeRole(metadata.role) ??
-    normalizeRole(metadata.rol) ??
-    authAccount?.role ??
-    'user';
+  const role = normalizeRole(metadata.role) ?? normalizeRole(metadata.rol) ?? 'user';
 
   const name =
     typeof metadata.full_name === 'string'
       ? metadata.full_name
       : typeof metadata.name === 'string'
         ? metadata.name
-        : authAccount?.name;
+        : undefined;
 
   const avatar = typeof metadata.avatar_url === 'string' ? metadata.avatar_url : undefined;
+  const area = typeof metadata.area === 'string' ? metadata.area : undefined;
 
-  return buildLocalUser(email || authAccount?.email || 'usuario@whirlpool.com', role, {
-    name,
-    avatar,
-    area: authAccount?.area,
-  });
+  return buildUser(authUser.id, email, role, { name, avatar, area });
 };
 
 function AppContent() {
@@ -104,12 +97,11 @@ function AppContent() {
   useEffect(() => {
     let isMounted = true;
 
-    const restoreUser = () => {
-      const savedUser = localStorage.getItem(USER_STORAGE_KEY);
-      if (!savedUser) return null;
-
+    const restoreUser = (): User | null => {
+      const saved = localStorage.getItem(USER_STORAGE_KEY);
+      if (!saved) return null;
       try {
-        return JSON.parse(savedUser) as User;
+        return JSON.parse(saved) as User;
       } catch {
         localStorage.removeItem(USER_STORAGE_KEY);
         return null;
@@ -118,14 +110,14 @@ function AppContent() {
 
     const syncAuthUser = async () => {
       const localUser = restoreUser();
-      if (isMounted && localUser) {
-        setUser(localUser);
-      }
+      if (isMounted && localUser) setUser(localUser);
 
       const { data, error } = await supabase.auth.getUser();
       if (!isMounted) return;
 
       if (error || !data.user) {
+        setUser(null);
+        localStorage.removeItem(USER_STORAGE_KEY);
         setIsAuthReady(true);
         return;
       }
@@ -138,9 +130,7 @@ function AppContent() {
 
     void syncAuthUser();
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!isMounted) return;
 
       if (!session?.user) {
@@ -162,10 +152,9 @@ function AppContent() {
     };
   }, []);
 
-  const handleLogin = (email: string, role: UserRole) => {
-    const newUser = buildLocalUser(email, role);
-    setUser(newUser);
-    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(newUser));
+  const handleLogin = (loggedInUser: User) => {
+    setUser(loggedInUser);
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(loggedInUser));
     setIsAuthReady(true);
   };
 
@@ -185,17 +174,9 @@ function AppContent() {
 
   const defaultAuthenticatedRoute = user ? getDefaultRouteByRole(user.role) : '/login';
 
-  if (!user && location.pathname !== '/login') {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (user && location.pathname === '/login') {
-    return <Navigate to={defaultAuthenticatedRoute} replace />;
-  }
-
-  if (user && location.pathname === '/' && user.role !== 'super-admin') {
-    return <Navigate to={defaultAuthenticatedRoute} replace />;
-  }
+  if (!user && location.pathname !== '/login' && location.pathname !== '/register') return <Navigate to="/login" replace />;
+  if (user && location.pathname === '/login') return <Navigate to={defaultAuthenticatedRoute} replace />;
+  if (user && location.pathname === '/' && user.role !== 'super-admin') return <Navigate to={defaultAuthenticatedRoute} replace />;
 
   const getActivePage = () => {
     const path = location.pathname;
@@ -234,6 +215,7 @@ function AppContent() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
+      <Route path="/register" element={<RegisterPage />} />
 
       <Route
         path="/*"
@@ -256,11 +238,9 @@ function AppContent() {
               {user?.role === 'super-admin' && (
                 <Route path="/admin/dashboard" element={<SuperAdminDashboard />} />
               )}
-
               {(user?.role === 'super-admin' || user?.role === 'content-admin') && (
                 <Route path="/admin/content" element={<ContentManagementPage />} />
               )}
-
               {(user?.role === 'super-admin' || user?.role === 'content-admin') && (
                 <Route path="/admin/users" element={<UserManagementPage />} />
               )}

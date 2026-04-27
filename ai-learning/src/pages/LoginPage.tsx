@@ -1,21 +1,22 @@
 import { motion } from 'motion/react';
 import { useState, type FormEvent } from 'react';
-import { UserRole } from '../types';
-import { findAuthAccount } from '../lib/authApi';
+import { Link } from 'react-router-dom';
 import whirlpoolLogo from '../assets/logowhirlpoolblack.png';
 import { loginWithGoogle } from '../lib/auth';
-import { isSupabaseConfigured } from '../lib/supabaseClient';
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import type { User, UserRole } from '../types';
 
 interface LoginPageProps {
-  onLogin: (email: string, role: UserRole) => void;
+  onLogin: (user: User) => void;
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const inferRoleFromRedirect = (redirectTo?: string): UserRole => {
-  if (redirectTo?.startsWith('/admin/super')) return 'super-admin';
-  if (redirectTo?.startsWith('/admin/dashboard')) return 'super-admin';
-  if (redirectTo?.startsWith('/admin/content')) return 'content-admin';
+const normalizeRole = (value: unknown): UserRole => {
+  if (typeof value !== 'string') return 'user';
+  const v = value.trim().toLowerCase();
+  if (v === 'super-admin' || v === 'superadministrador') return 'super-admin';
+  if (v === 'content-admin' || v === 'admin' || v === 'administrador') return 'content-admin';
   return 'user';
 };
 
@@ -25,78 +26,92 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; credentials?: string }>({});
   const [ssoError, setSsoError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const validateCredentials = () => {
-    const nextErrors: { email?: string; password?: string; credentials?: string } = {};
+  const validateForm = () => {
+    const nextErrors: typeof errors = {};
     const normalizedEmail = email.trim().toLowerCase();
-
     if (!normalizedEmail) {
       nextErrors.email = 'Ingresa tu correo.';
     } else if (!EMAIL_PATTERN.test(normalizedEmail)) {
       nextErrors.email = 'Ingresa un correo completo y válido.';
     }
-
     if (!password) {
       nextErrors.password = 'Ingresa tu contraseña.';
     } else if (password.length < 6) {
       nextErrors.password = 'La contraseña debe tener al menos 6 caracteres.';
     }
-
     return nextErrors;
   };
 
-  const handleCredentialLogin = (event: FormEvent<HTMLFormElement>) => {
+  const handleCredentialLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const nextErrors = validateCredentials();
+    const nextErrors = validateForm();
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
       return;
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
+    setLoading(true);
+    setErrors({});
 
-    fetch('/api/auth/login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ correo: normalizedEmail, password }),
-    })
-      .then(async (response) => {
-        if (response.ok) {
-          const payload = await response.json().catch(() => ({} as { redirectTo?: string; role?: UserRole }));
-          setErrors({});
-          onLogin(normalizedEmail, payload.role ?? inferRoleFromRedirect(payload.redirectTo));
-          return;
-        }
+    try {
+      const normalizedEmail = email.trim().toLowerCase();
 
-        const account = findAuthAccount(normalizedEmail, password);
-        if (account) {
-          setErrors({});
-          onLogin(account.email, account.role);
-          return;
-        }
-
-        setErrors({ credentials: 'Correo o contraseña incorrectos.' });
-      })
-      .catch(() => {
-        const account = findAuthAccount(normalizedEmail, password);
-        if (account) {
-          setErrors({});
-          onLogin(account.email, account.role);
-          return;
-        }
-
-        setErrors({ credentials: 'No se pudo conectar con el servicio de autenticación.' });
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
       });
+
+      if (error || !data.user) {
+        setErrors({ credentials: 'Correo o contraseña incorrectos.' });
+        return;
+      }
+
+      const authUser = data.user;
+      const metadata = {
+        ...(authUser.app_metadata ?? {}),
+        ...(authUser.user_metadata ?? {}),
+      };
+
+      const loggedInUser: User = {
+        id: authUser.id,
+        email: authUser.email ?? normalizedEmail,
+        role: normalizeRole(metadata.role ?? metadata.rol),
+        name: typeof metadata.full_name === 'string'
+          ? metadata.full_name
+          : typeof metadata.name === 'string'
+            ? metadata.name
+            : normalizedEmail.split('@')[0],
+        avatar: typeof metadata.avatar_url === 'string'
+          ? metadata.avatar_url
+          : `https://picsum.photos/seed/${authUser.id}/100/100`,
+        area: typeof metadata.area === 'string' ? metadata.area : 'General',
+        gender: 'M',
+        score: 0,
+        badges: [],
+        completedCourses: [],
+        pendingCourses: [],
+        streak: 0,
+        completedQuizzesCount: 0,
+        savedPrompts: [],
+      };
+
+      onLogin(loggedInUser);
+
+    } catch {
+      setErrors({ credentials: 'No se pudo conectar con el servicio de autenticación.' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleGoogleLogin = async () => {
     setSsoError('');
 
     if (!isSupabaseConfigured) {
-      setSsoError('Google SSO no esta configurado. Define VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en .env.local.');
+      setSsoError('Google SSO no está configurado. Define VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en .env.');
       return;
     }
 
@@ -114,7 +129,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-3xl animate-pulse"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-accent-blue/5 rounded-full blur-3xl animate-pulse [animation-delay:2s]"></div>
 
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md z-10"
@@ -122,9 +137,9 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
         <div className="bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 p-10 sm:p-12 text-center">
           <div className="mb-10 flex flex-col items-center">
             <div className="w-24 h-24 bg-white rounded-3xl flex items-center justify-center mb-6 shadow-2xl border border-slate-50">
-              <img 
+              <img
                 src={whirlpoolLogo}
-                alt="Whirlpool" 
+                alt="Whirlpool"
                 className="w-16 h-16 object-contain"
               />
             </div>
@@ -136,7 +151,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
               <h2 className="text-lg font-bold text-on-surface mb-1">Acceso Corporativo</h2>
               <p className="text-xs text-slate-500 leading-relaxed">
-                Inicia sesión con correo y contraseña para entrar al panel correspondiente.
+                Inicia sesión con tu correo y contraseña corporativos.
               </p>
             </div>
 
@@ -149,10 +164,10 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                   id="email"
                   type="email"
                   value={email}
-                  onChange={(event) => {
-                    setEmail(event.target.value);
+                  onChange={(e) => {
+                    setEmail(e.target.value);
                     if (errors.email || errors.credentials) {
-                      setErrors((current) => ({ ...current, email: undefined, credentials: undefined }));
+                      setErrors((prev) => ({ ...prev, email: undefined, credentials: undefined }));
                     }
                   }}
                   placeholder="usuario@whirlpool.com"
@@ -170,18 +185,18 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                     id="password"
                     type={showPassword ? 'text' : 'password'}
                     value={password}
-                    onChange={(event) => {
-                      setPassword(event.target.value);
+                    onChange={(e) => {
+                      setPassword(e.target.value);
                       if (errors.password || errors.credentials) {
-                        setErrors((current) => ({ ...current, password: undefined, credentials: undefined }));
+                        setErrors((prev) => ({ ...prev, password: undefined, credentials: undefined }));
                       }
                     }}
                     placeholder="Ingresa tu contraseña"
-                    className="flex-1 border-0 bg-transparent p-0 text-sm text-on-surface placeholder:text-slate-400 focus:ring-0"
+                    className="flex-1 border-0 bg-transparent p-0 text-sm text-on-surface placeholder:text-slate-400 focus:ring-0 focus:outline-none"
                   />
                   <button
                     type="button"
-                    onClick={() => setShowPassword((current) => !current)}
+                    onClick={() => setShowPassword((prev) => !prev)}
                     className="text-slate-400 hover:text-primary transition-colors"
                     aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                   >
@@ -199,12 +214,22 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                 </div>
               )}
 
-              <button 
+              <button
                 type="submit"
-                className="w-full py-4 bg-primary text-white font-bold rounded-2xl shadow-lg hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 group"
+                disabled={loading}
+                className="w-full py-4 bg-primary text-white font-bold rounded-2xl shadow-lg hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
-                Ingresar
-                <span className="material-symbols-outlined">arrow_forward</span>
+                {loading ? (
+                  <>
+                    <span className="material-symbols-outlined animate-spin text-xl">progress_activity</span>
+                    Verificando...
+                  </>
+                ) : (
+                  <>
+                    Ingresar
+                    <span className="material-symbols-outlined">arrow_forward</span>
+                  </>
+                )}
               </button>
             </form>
 
@@ -214,9 +239,10 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
               <div className="h-px bg-slate-100 flex-1"></div>
             </div>
 
-            <button 
+            <button
               onClick={handleGoogleLogin}
-              className="w-full py-4 bg-white border border-slate-200 text-slate-700 font-bold rounded-2xl hover:bg-slate-50 transition-all flex items-center justify-center gap-3 group"
+              disabled={loading}
+              className="w-full py-4 bg-white border border-slate-200 text-slate-700 font-bold rounded-2xl hover:bg-slate-50 transition-all flex items-center justify-center gap-3 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
               Continuar con Google SSO
@@ -227,13 +253,18 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                 {ssoError}
               </div>
             )}
-
           </div>
 
           <div className="mt-12 pt-8 border-t border-slate-50">
             <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
-              Al continuar, aceptas los términos de uso y políticas de privacidad de Whirlpool Corporation. 
+              Al continuar, aceptas los términos de uso y políticas de privacidad de Whirlpool Corporation.
               Acceso restringido a empleados autorizados.
+            </p>
+            <p className="text-center text-xs text-slate-400 mt-6">
+              ¿No tienes cuenta?{' '}
+              <Link to="/register" className="text-primary font-bold hover:underline">
+                Regístrate aquí
+              </Link>
             </p>
           </div>
         </div>
