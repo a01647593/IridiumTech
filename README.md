@@ -29,6 +29,12 @@ Base full-stack para el reto: frontend React + backend Express + WebSockets + pe
 - `POST /api/upload`
 - `POST /api/whirlpool/event`
 
+## Estado del chat
+- `GET /api/messages/:userId` exige JWT de Supabase y devuelve `403` si el `userId` no coincide con el usuario autenticado.
+- El chat persiste en `chat_messages` de Supabase solo después de que Gemini responde con éxito, guardando mensaje del usuario y del bot en la misma operación.
+- El contexto RAG recuperado con `match_documents` se inyecta en `systemInstruction` como conocimiento técnico oficial de Whirlpool.
+- La salida de Gemini se filtra antes de emitir por Socket.IO para bloquear marcas de competencia y aplicar el mensaje de fallback de Whirlpool.
+
 ## Variables de entorno
 - `VITE_API_BASE_URL` opcional, por defecto usa el mismo origen con proxy de Vite.
 - `PORT` opcional para el backend, por defecto `3001`.
