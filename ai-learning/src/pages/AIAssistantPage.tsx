@@ -174,16 +174,10 @@ export default function AIAssistantPage() {
                         li: ({ children }) => <li>{children}</li>,
                         strong: ({ children }) => <strong>{children}</strong>,
                         em: ({ children }) => <em>{children}</em>,
-                        code: ({ inline, className, children, ...props }) =>
-                          inline ? (
-                            <code className={className} {...props}>
-                              {children}
-                            </code>
-                          ) : (
-                            <code className={className} {...props}>
-                              {children}
-                            </code>
-                          ),
+                        code: ({ className, children, ...props }: any) =>
+                          <code className={className} {...props}>
+                            {children}
+                          </code>,
                         blockquote: ({ children }) => <blockquote>{children}</blockquote>,
                         table: ({ children }) => <table>{children}</table>,
                         thead: ({ children }) => <thead>{children}</thead>,

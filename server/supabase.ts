@@ -24,7 +24,14 @@ const adminClient = createClient(supabaseUrl || 'http://localhost', supabaseServ
 });
 
 const geminiApiKey = process.env.GEMINI_API_KEY ?? process.env.VITE_GEMINI_API_KEY ?? '';
-const geminiEmbeddingModel = process.env.GEMINI_EMBEDDING_MODEL ?? 'text-embedding-004';
+const geminiEmbeddingModel = process.env.GEMINI_EMBEDDING_MODEL ?? '';
+const candidateEmbeddingModels = [
+  geminiEmbeddingModel,
+  'text-embedding-3-large',
+  'text-embedding-3-small',
+  'embedding-gecko-001',
+  'gemini-embedding-1'
+].filter(Boolean) as string[];
 const ai = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
 
 export type VerifiedSupabaseUser = {
@@ -114,17 +121,24 @@ export async function embedWhirlpoolQuestion(question: string): Promise<number[]
     throw new Error('Falta configurar GEMINI_API_KEY para generar embeddings.');
   }
 
-  const response = await ai.models.embedContent({
-    model: geminiEmbeddingModel,
-    contents: normalizedQuestion,
-  });
+  const errors: string[] = [];
 
-  const embedding = response.embeddings?.[0]?.values;
-  if (!embedding || embedding.length === 0) {
-    throw new Error('Gemini no devolvió un embedding válido.');
+  for (const model of candidateEmbeddingModels) {
+    try {
+      const response = await ai.models.embedContent({ model, contents: normalizedQuestion });
+      const embedding = response.embeddings?.[0]?.values;
+      if (embedding && embedding.length > 0) {
+        return embedding;
+      }
+      errors.push(`model=${model} returned empty embedding`);
+    } catch (err: any) {
+      const msg = err instanceof Error ? err.message : String(err);
+      errors.push(`model=${model} error=${msg}`);
+      // try next model
+    }
   }
 
-  return embedding;
+  throw new Error(`Gemini embeddings failed for candidates: ${errors.join(' | ')}`);
 }
 
 export async function matchWhirlpoolManualDocuments(question: string, matchCount = 5): Promise<WhirlpoolManualMatch[]> {
@@ -144,5 +158,12 @@ export async function matchWhirlpoolManualDocuments(question: string, matchCount
 
 export async function findBestWhirlpoolManualMatch(question: string): Promise<WhirlpoolManualMatch | null> {
   const matches = await matchWhirlpoolManualDocuments(question, 1);
-  return matches[0] ?? null;
+  const minSimEnv = process.env.MATCH_MIN_SIMILARITY ?? process.env.GEMINI_MATCH_MIN_SIMILARITY ?? '';
+  const minSim = minSimEnv ? parseFloat(minSimEnv) : 0.7;
+  const best = matches[0] ?? null;
+  if (!best) return null;
+  // If similarity present, enforce threshold
+  const sim = typeof best.similarity === 'number' ? best.similarity : null;
+  if (sim === null) return best;
+  return sim >= minSim ? best : null;
 }
