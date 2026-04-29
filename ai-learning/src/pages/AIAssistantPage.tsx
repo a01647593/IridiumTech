@@ -18,36 +18,9 @@ const sanitizeEnvValue = (value: unknown) => {
 
 const geminiApiKey =
   sanitizeEnvValue((import.meta as { env?: Record<string, string> }).env?.VITE_GEMINI_API_KEY) ||
-  sanitizeEnvValue((process.env as { GEMINI_API_KEY?: string }).GEMINI_API_KEY) ||
   '';
 
 const ai = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
-
-const fallbackAssistantReply = (userMessage: string) => {
-  const normalized = userMessage.trim().toLowerCase();
-
-  if (/qu[ií]en eres|qui[eé]n eres|c[oó]mo me ayudas|procesos|whirlpool/.test(normalized)) {
-    return [
-      'Soy la Gema de Ingeniería de Whirlpool y te ayudo a navegar esta plataforma adaptativa.',
-      'Puedo orientarte sobre el Dashboard, el catálogo de cursos, la biblioteca de gemas, el leaderboard, el asistente IA y tu perfil.',
-      'Si quieres, dime qué sección necesitas y te explico cómo usarla.'
-    ].join('\n\n');
-  }
-
-  if (/perfil|avatar|foto|racha|xp|insignia/.test(normalized)) {
-    return 'En Perfil puedes ver tus estadísticas, editar tu avatar, revisar tus insignias y consultar tus cursos completados.';
-  }
-
-  if (/curso|cursos|cat[aá]logo/.test(normalized)) {
-    return 'En el Catálogo de Cursos puedes explorar los cursos disponibles, revisar sus detalles y entrar a cada lección desde la plataforma.';
-  }
-
-  if (/ayuda|faq|soporte|dudas/.test(normalized)) {
-    return 'El Centro de Ayuda reúne la información de uso de la plataforma. Si me dices la sección exacta, te indico dónde encontrarla.';
-  }
-
-  return 'Puedo ayudarte a navegar la plataforma adaptativa: usa el menú lateral para ir a Dashboard, Cursos, Biblioteca de Gemas, Leaderboard, Asistente IA, Ayuda o Perfil. Si quieres, dime una sección y te digo qué hace.';
-};
 
 export default function AIAssistantPage() {
   const [messages, setMessages] = useState<Message[]>([
@@ -129,18 +102,6 @@ export default function AIAssistantPage() {
           }
         });
       } catch (streamError) {
-        const message = streamError instanceof Error ? streamError.message : String(streamError);
-        if (message.includes('429') || message.toLowerCase().includes('quota')) {
-          const fallbackText = fallbackAssistantReply(input);
-          setMessages((prev) =>
-            prev.map((messageItem) =>
-              messageItem.id === assistantMessageId
-                ? { ...messageItem, content: fallbackText }
-                : messageItem
-            )
-          );
-          return;
-        }
         throw streamError;
       }
 
@@ -178,20 +139,6 @@ export default function AIAssistantPage() {
       );
     } catch (error) {
       console.error("Gemini API Error:", error);
-      const message = error instanceof Error ? error.message : String(error);
-      if (message.includes('429') || message.toLowerCase().includes('quota')) {
-        const fallbackText = fallbackAssistantReply(input);
-        const errorMessage: Message = {
-          id: assistantMessageId,
-          role: 'assistant',
-          content: fallbackText,
-          timestamp: new Date()
-        };
-        setMessages((prev) =>
-          prev.map((messageItem) => (messageItem.id === assistantMessageId ? errorMessage : messageItem))
-        );
-        return;
-      }
       const errorMessage: Message = {
         id: assistantMessageId,
         role: 'assistant',
