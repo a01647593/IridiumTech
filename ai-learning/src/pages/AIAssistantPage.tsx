@@ -11,9 +11,13 @@ interface Message {
   timestamp: Date;
 }
 
+const sanitizeEnvValue = (value: unknown) => {
+  if (typeof value !== 'string') return '';
+  return value.trim().replace(/^['"]|['"]$/g, '');
+};
+
 const geminiApiKey =
-  (import.meta as { env?: Record<string, string> }).env?.VITE_GEMINI_API_KEY ||
-  (process.env as { GEMINI_API_KEY?: string }).GEMINI_API_KEY ||
+  sanitizeEnvValue((import.meta as { env?: Record<string, string> }).env?.VITE_GEMINI_API_KEY) ||
   '';
 
 const ai = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
@@ -88,13 +92,18 @@ export default function AIAssistantPage() {
         parts: [{ text: input }]
       });
 
-      const stream = await ai.models.generateContentStream({
-        model: "gemini-3-flash-preview",
-        contents: history,
-        config: {
-          systemInstruction: "Identidad: Eres el Asistente Experto de Whirlpool México. Restricciones: SOLO puedes responder dudas sobre instalación, mantenimiento y errores de línea blanca Whirlpool. Comportamiento: Si el usuario pregunta algo no relacionado (política, otras marcas, ocio), responde: <Lo siento, como asistente de Whirlpool solo puedo ayudarte con temas relacionados a nuestros productos>. Estilo: Usa un tono profesional, amable y estructurado con puntos clave",
-        }
-      });
+      let stream;
+      try {
+        stream = await ai.models.generateContentStream({
+          model: 'gemini-3-flash-preview',
+          contents: history,
+          config: {
+            systemInstruction: "Eres el asistente virtual de soporte para la nueva Plataforma Adaptativa de Whirlpool. Tu ÚNICA función es ayudar a los usuarios a navegar por esta plataforma, usar sus funciones y entender su interfaz. Tu ÚNICA fuente de verdad es el texto proporcionado bajo la etiqueta [CONTEXTO DE LA PLATAFORMA]. Si el usuario pregunta algo que no está en ese contexto (incluso si es sobre electrodomésticos Whirlpool, reparaciones, o temas externos), tienes estrictamente prohibido inventar o adivinar. Responde siempre: Lo siento, solo puedo ayudarte con dudas sobre el uso y las funciones de esta plataforma adaptativa.",
+          }
+        });
+      } catch (streamError) {
+        throw streamError;
+      }
 
       let streamedText = '';
 

@@ -4,21 +4,14 @@ import { Link } from 'react-router-dom';
 import whirlpoolLogo from '../assets/logowhirlpoolblack.png';
 import { loginWithGoogle } from '../lib/auth';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
-import type { User, UserRole } from '../types';
+import type { User } from '../types';
+import { getUserProfile } from '../lib/profileService';
 
 interface LoginPageProps {
   onLogin: (user: User) => void;
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-const normalizeRole = (value: unknown): UserRole => {
-  if (typeof value !== 'string') return 'user';
-  const v = value.trim().toLowerCase();
-  if (v === 'super-admin' || v === 'superadministrador') return 'super-admin';
-  if (v === 'content-admin' || v === 'admin' || v === 'administrador') return 'content-admin';
-  return 'user';
-};
 
 export default function LoginPage({ onLogin }: LoginPageProps) {
   const [email, setEmail] = useState('');
@@ -65,43 +58,26 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       });
 
       if (error || !data.user) {
-        setErrors({ credentials: 'Correo o contraseña incorrectos.' });
+        setErrors({
+          credentials: error?.message || 'Correo o contraseña incorrectos.'
+        });
         return;
       }
 
       const authUser = data.user;
-      const metadata = {
-        ...(authUser.app_metadata ?? {}),
-        ...(authUser.user_metadata ?? {}),
-      };
 
-      const loggedInUser: User = {
-        id: authUser.id,
-        email: authUser.email ?? normalizedEmail,
-        role: normalizeRole(metadata.role ?? metadata.rol),
-        name: typeof metadata.full_name === 'string'
-          ? metadata.full_name
-          : typeof metadata.name === 'string'
-            ? metadata.name
-            : normalizedEmail.split('@')[0],
-        avatar: typeof metadata.avatar_url === 'string'
-          ? metadata.avatar_url
-          : `https://picsum.photos/seed/${authUser.id}/100/100`,
-        area: typeof metadata.area === 'string' ? metadata.area : 'General',
-        gender: 'M',
-        score: 0,
-        badges: [],
-        completedCourses: [],
-        pendingCourses: [],
-        streak: 0,
-        completedQuizzesCount: 0,
-        savedPrompts: [],
-      };
+      const loggedInUser = await getUserProfile(authUser.id);
+
+      if (!loggedInUser) {
+        setErrors({ credentials: 'No se pudo cargar el perfil del usuario.' });
+        return;
+      }
 
       onLogin(loggedInUser);
 
-    } catch {
-      setErrors({ credentials: 'No se pudo conectar con el servicio de autenticación.' });
+    } catch (caughtError) {
+      const message = caughtError instanceof Error ? caughtError.message : 'No se pudo conectar con el servicio de autenticación.';
+      setErrors({ credentials: message });
     } finally {
       setLoading(false);
     }

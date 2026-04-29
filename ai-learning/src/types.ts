@@ -1,7 +1,22 @@
 export type UserRole = 'user' | 'content-admin' | 'super-admin';
 
+export interface Badge {
+  id: string;
+  name: string;
+  description: string;
+  dateEarned?: string;
+  icon?: string;
+}
+
+export interface CompletedCourseSummary {
+  id: string;
+  title: string;
+  thumbnail: string;
+  completedAt: string;
+}
+
 export interface User {
-  id: string;           // 👈 NUEVO: UUID que viene de Supabase auth
+  id: string;
   email: string;
   role: UserRole;
   name: string;
@@ -11,19 +26,12 @@ export interface User {
   score: number;
   badges: Badge[];
   completedCourses: string[];
+  completedCoursesDetailed: CompletedCourseSummary[];
   pendingCourses: string[];
   streak: number;
   lastActivityDate?: string;
   completedQuizzesCount: number;
   savedPrompts: string[];
-}
-
-export interface Badge {
-  id: string;
-  name: string;
-  icon: string;
-  description: string;
-  dateEarned?: string;
 }
 
 export interface QuizQuestion {

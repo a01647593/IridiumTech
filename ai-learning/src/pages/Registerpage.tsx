@@ -1,28 +1,19 @@
 import { motion } from 'motion/react';
-import { useState, type FormEvent } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useEffect, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import whirlpoolLogo from '../assets/logowhirlpoolblack.png';
-import { supabase } from '../lib/supabaseClient';
+import { fetchDepartments, type Department } from '../lib/departmentService';
+import { registerCorporateUser } from '../lib/registerService';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const AREAS = [
-  'Ingeniería',
-  'Marketing',
-  'Finanzas',
-  'HR',
-  'Operaciones',
-  'Innovación',
-  'General',
-];
-
 export default function RegisterPage() {
-  const navigate = useNavigate();
+  const [departments, setDepartments] = useState<Department[]>([]);
 
   const [form, setForm] = useState({
     name: '',
     email: '',
-    area: '',
+    departmentId: '',
     password: '',
     confirmPassword: '',
   });
@@ -30,7 +21,18 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const [loadingDepartments, setLoadingDepartments] = useState(true);
   const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    const loadDepartments = async () => {
+      const data = await fetchDepartments();
+      setDepartments(data);
+      setLoadingDepartments(false);
+    };
+
+    void loadDepartments();
+  }, []);
 
   const set = (field: string, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -48,7 +50,7 @@ export default function RegisterPage() {
       next.email = 'Ingresa un correo válido.';
     }
 
-    if (!form.area) next.area = 'Selecciona tu área.';
+    if (!form.departmentId) next.departmentId = 'Selecciona tu departamento.';
 
     if (!form.password) {
       next.password = 'Ingresa una contraseña.';
@@ -77,48 +79,17 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email: form.email.trim().toLowerCase(),
+      await registerCorporateUser({
+        name: form.name,
+        email: form.email,
         password: form.password,
-        options: {
-          data: {
-            full_name: form.name.trim(),
-            area: form.area,
-            role: 'user',
-          },
-        },
+        departmentId: Number(form.departmentId),
       });
 
-      if (error) {
-        setErrors({ general: error.message });
-        return;
-      }
-
-      if (!data.user) {
-        setErrors({ general: 'Supabase no devolvió el usuario creado.' });
-        return;
-      }
-
-      const { error: insertError } = await supabase.from('users').insert({
-        id: data.user.id,
-        nombre: form.name.trim(),
-        empleado_verificado: false,
-        ultima_actividad: new Date().toISOString(),
-        created_at: new Date().toISOString(),
-        email: form.email.trim().toLowerCase(),
-        department_id: 1,
-      });
-
-      if (insertError) {
-        setErrors({ general: insertError.message });
-        return;
-      }
-
-      await supabase.auth.signOut();
       setSuccess(true);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setErrors({ general: 'No se pudo crear la cuenta. Intenta de nuevo.' });
+      setErrors({ general: err.message || 'No se pudo crear la cuenta.' });
     } finally {
       setLoading(false);
     }
@@ -139,7 +110,7 @@ export default function RegisterPage() {
           <h2 className="text-2xl font-black text-on-surface mb-3">¡Cuenta creada!</h2>
 
           <p className="text-slate-500 text-sm leading-relaxed mb-8">
-            Usuario creado correctamente.
+            Usuario corporativo registrado correctamente.
           </p>
 
           <Link
@@ -186,11 +157,11 @@ export default function RegisterPage() {
                 value={form.name}
                 onChange={(e) => set('name', e.target.value)}
                 placeholder="Juan Pérez"
-                className={`w-full px-4 py-3 bg-white border rounded-2xl text-sm text-on-surface placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
-                  errors.name ? 'border-red-300 focus:ring-red-100' : 'border-slate-200 focus:ring-primary/10'
+                className={`w-full px-4 py-3 bg-white border rounded-2xl text-sm ${
+                  errors.name ? 'border-red-300' : 'border-slate-200'
                 }`}
               />
-              {errors.name && <p className="text-xs text-red-500 font-medium">{errors.name}</p>}
+              {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
             </div>
 
             <div className="space-y-1.5">
@@ -202,63 +173,56 @@ export default function RegisterPage() {
                 value={form.email}
                 onChange={(e) => set('email', e.target.value)}
                 placeholder="usuario@whirlpool.com"
-                className={`w-full px-4 py-3 bg-white border rounded-2xl text-sm text-on-surface placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
-                  errors.email ? 'border-red-300 focus:ring-red-100' : 'border-slate-200 focus:ring-primary/10'
+                className={`w-full px-4 py-3 bg-white border rounded-2xl text-sm ${
+                  errors.email ? 'border-red-300' : 'border-slate-200'
                 }`}
               />
-              {errors.email && <p className="text-xs text-red-500 font-medium">{errors.email}</p>}
+              {errors.email && <p className="text-xs text-red-500">{errors.email}</p>}
             </div>
 
             <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
-                Área
+                Departamento
               </label>
               <select
-                value={form.area}
-                onChange={(e) => set('area', e.target.value)}
-                className={`w-full px-4 py-3 bg-white border rounded-2xl text-sm text-on-surface focus:outline-none focus:ring-2 transition-all appearance-none ${
-                  errors.area ? 'border-red-300 focus:ring-red-100' : 'border-slate-200 focus:ring-primary/10'
-                } ${!form.area ? 'text-slate-400' : ''}`}
+                value={form.departmentId}
+                onChange={(e) => set('departmentId', e.target.value)}
+                disabled={loadingDepartments}
+                className={`w-full px-4 py-3 bg-white border rounded-2xl text-sm ${
+                  errors.departmentId ? 'border-red-300' : 'border-slate-200'
+                }`}
               >
-                <option value="" disabled>
-                  Selecciona tu área
+                <option value="">
+                  {loadingDepartments ? 'Cargando departamentos...' : 'Selecciona tu departamento'}
                 </option>
-                {AREAS.map((a) => (
-                  <option key={a} value={a}>
-                    {a}
+                {departments.map((department) => (
+                  <option key={department.id} value={department.id}>
+                    {department.name}
                   </option>
                 ))}
               </select>
-              {errors.area && <p className="text-xs text-red-500 font-medium">{errors.area}</p>}
+              {errors.departmentId && <p className="text-xs text-red-500">{errors.departmentId}</p>}
             </div>
 
             <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
                 Contraseña
               </label>
-              <div
-                className={`flex items-center gap-2 rounded-2xl border bg-white px-4 py-3 transition-all focus-within:ring-2 ${
-                  errors.password ? 'border-red-300 focus-within:ring-red-100' : 'border-slate-200 focus-within:ring-primary/10'
-                }`}
-              >
+              <div className="flex items-center rounded-2xl border border-slate-200 px-4 py-3">
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={form.password}
                   onChange={(e) => set('password', e.target.value)}
                   placeholder="Mínimo 6 caracteres"
-                  className="flex-1 border-0 bg-transparent p-0 text-sm text-on-surface placeholder:text-slate-400 focus:ring-0 focus:outline-none"
+                  className="flex-1 bg-transparent outline-none text-sm"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((p) => !p)}
-                  className="text-slate-400 hover:text-primary transition-colors"
-                >
-                  <span className="material-symbols-outlined text-[22px]">
+                <button type="button" onClick={() => setShowPassword((p) => !p)}>
+                  <span className="material-symbols-outlined text-slate-400">
                     {showPassword ? 'visibility_off' : 'visibility'}
                   </span>
                 </button>
               </div>
-              {errors.password && <p className="text-xs text-red-500 font-medium">{errors.password}</p>}
+              {errors.password && <p className="text-xs text-red-500">{errors.password}</p>}
             </div>
 
             <div className="space-y-1.5">
@@ -270,15 +234,15 @@ export default function RegisterPage() {
                 value={form.confirmPassword}
                 onChange={(e) => set('confirmPassword', e.target.value)}
                 placeholder="Repite tu contraseña"
-                className={`w-full px-4 py-3 bg-white border rounded-2xl text-sm text-on-surface placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
-                  errors.confirmPassword ? 'border-red-300 focus:ring-red-100' : 'border-slate-200 focus:ring-primary/10'
+                className={`w-full px-4 py-3 bg-white border rounded-2xl text-sm ${
+                  errors.confirmPassword ? 'border-red-300' : 'border-slate-200'
                 }`}
               />
-              {errors.confirmPassword && <p className="text-xs text-red-500 font-medium">{errors.confirmPassword}</p>}
+              {errors.confirmPassword && <p className="text-xs text-red-500">{errors.confirmPassword}</p>}
             </div>
 
             {errors.general && (
-              <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 font-medium">
+              <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                 {errors.general}
               </div>
             )}
@@ -286,19 +250,9 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-4 bg-primary text-white font-bold rounded-2xl shadow-lg hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100 mt-2"
+              className="w-full py-4 bg-primary text-white font-bold rounded-2xl shadow-lg hover:scale-[1.02] transition-all"
             >
-              {loading ? (
-                <>
-                  <span className="material-symbols-outlined animate-spin text-xl">progress_activity</span>
-                  Creando cuenta...
-                </>
-              ) : (
-                <>
-                  <span className="material-symbols-outlined">person_add</span>
-                  Crear Cuenta
-                </>
-              )}
+              {loading ? 'Creando cuenta...' : 'Crear Cuenta'}
             </button>
           </form>
 
