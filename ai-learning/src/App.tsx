@@ -108,28 +108,6 @@ function AppContent() {
       }
     };
 
-    // Temporary development helper: if no user is present, inject a demo user
-    // so the /assistant route can be accessed locally without Supabase auth.
-    if (!localStorage.getItem(USER_STORAGE_KEY) && (import.meta.env.MODE !== 'production')) {
-      const demo = {
-        id: 'demo-user',
-        email: 'demo@whirlpool.test',
-        role: 'user',
-        name: 'Demo Usuario',
-        avatar: 'https://picsum.photos/seed/demo/100/100',
-        area: 'Ingeniería',
-        gender: 'M',
-        score: 0,
-        badges: [],
-        completedCourses: [],
-        pendingCourses: [],
-        streak: 0,
-        completedQuizzesCount: 0,
-        savedPrompts: []
-      } as User;
-      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(demo));
-    }
-
     const syncAuthUser = async () => {
       const localUser = restoreUser();
       if (isMounted && localUser) setUser(localUser);
