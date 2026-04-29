@@ -1,6 +1,6 @@
 //Este archivo posiblemente se eliminara, pero lo mantengo antes de estar seguro
 import { MOCK_COURSES } from '../constants';
-import type { Course } from '../types';
+import type { Course, CourseModule } from '../types';
 
 const COURSE_STORAGE_KEY = 'whirlpool_courses';
 
@@ -23,7 +23,7 @@ const normalizeModule = (module: {
     title?: string;
     questions?: Array<{ id?: string | number; question?: string; options?: string[]; correctAnswer?: number }>;
   };
-}) => ({
+}): CourseModule => ({
   id: String(module.id ?? `module-${Date.now()}`),
   title: module.title ?? 'Módulo',
   completed: Boolean(module.completed),

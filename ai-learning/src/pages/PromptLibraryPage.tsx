@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { MOCK_PROMPTS } from '../constants';
+import type { Prompt } from '../types';
 
 interface PromptMetrics {
   likes: number;
@@ -9,9 +10,11 @@ interface PromptMetrics {
   views: number;
 }
 
+type PromptCard = Prompt & { likedByMe: boolean };
+
 const getMetricsKey = (promptId: string) => `prompt_metrics_${promptId}`;
 
-const applyStoredMetrics = <T extends { id: string; likes: number; usageCount: number; likedByMe?: boolean }>(prompt: T): T => {
+const applyStoredMetrics = <T extends PromptCard>(prompt: T): T => {
   const rawMetrics = localStorage.getItem(getMetricsKey(prompt.id));
   if (!rawMetrics) {
     return prompt;
@@ -32,13 +35,18 @@ const applyStoredMetrics = <T extends { id: string; likes: number; usageCount: n
 
 export default function PromptLibraryPage() {
   const navigate = useNavigate();
-  const [prompts, setPrompts] = useState(
+  const [prompts, setPrompts] = useState<PromptCard[]>(
     MOCK_PROMPTS.map((p) => applyStoredMetrics({ ...p, likedByMe: false })),
   );
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Todas');
   const [showShareModal, setShowShareModal] = useState(false);
-  const [newGema, setNewGema] = useState({ title: '', description: '', category: 'Productividad', tags: '' });
+  const [newGema, setNewGema] = useState<{
+    title: string;
+    description: string;
+    category: Prompt['category'];
+    tags: string;
+  }>({ title: '', description: '', category: 'Productividad', tags: '' });
 
   const categories = ['Todas', 'Productividad', 'Ingeniería', 'Marketing', 'Finanzas', 'HR'];
 
@@ -83,16 +91,19 @@ export default function PromptLibraryPage() {
 
   const handleShare = () => {
     if (newGema.title && newGema.description) {
-      const gema = {
+      const gema: PromptCard = {
         id: Date.now().toString(),
         title: newGema.title,
         description: newGema.description,
+        content: newGema.description,
+        author: 'Usuario',
+        area: 'Productividad',
         category: newGema.category,
         tags: newGema.tags.split(',').map(t => t.trim()),
         likes: 0,
         usageCount: 0,
         impact: 'Nuevo',
-        author: 'Usuario'
+        likedByMe: false,
       };
       localStorage.setItem(
         getMetricsKey(gema.id),
@@ -257,7 +268,7 @@ export default function PromptLibraryPage() {
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Categoría</label>
                     <select 
                       value={newGema.category}
-                      onChange={(e) => setNewGema({ ...newGema, category: e.target.value })}
+                      onChange={(e) => setNewGema({ ...newGema, category: e.target.value as Prompt['category'] })}
                       className="w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium"
                     >
                       {categories.filter(c => c !== 'Todas').map(c => <option key={c}>{c}</option>)}

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import ThinkingIndicator from '../components/ThinkingIndicator';
 
 interface Message {
   id: string;
@@ -10,9 +11,13 @@ interface Message {
   timestamp: Date;
 }
 
+const sanitizeEnvValue = (value: unknown) => {
+  if (typeof value !== 'string') return '';
+  return value.trim().replace(/^['"]|['"]$/g, '');
+};
+
 const geminiApiKey =
-  (import.meta as { env?: Record<string, string> }).env?.VITE_GEMINI_API_KEY ||
-  (process.env as { GEMINI_API_KEY?: string }).GEMINI_API_KEY ||
+  sanitizeEnvValue((import.meta as { env?: Record<string, string> }).env?.VITE_GEMINI_API_KEY) ||
   '';
 
 const ai = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
@@ -59,7 +64,18 @@ export default function AIAssistantPage() {
       timestamp: new Date()
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    const assistantMessageId = (Date.now() + 1).toString();
+
+    setMessages((prev) => [
+      ...prev,
+      userMessage,
+      {
+        id: assistantMessageId,
+        role: 'assistant',
+        content: '',
+        timestamp: new Date()
+      }
+    ]);
     setInput('');
     setIsTyping(true);
 
@@ -76,31 +92,62 @@ export default function AIAssistantPage() {
         parts: [{ text: input }]
       });
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: history,
-        config: {
-          systemInstruction: "Eres la 'Gema de Ingeniería' de Whirlpool, un asistente experto en IA y procesos corporativos. Tu objetivo es ayudar a los empleados a optimizar sus flujos de trabajo, aprender sobre IA generativa y utilizar las herramientas de GIT Labs. Sé profesional, servicial y enfocado en la eficiencia técnica. Responde siempre en español.",
+      let stream;
+      try {
+        stream = await ai.models.generateContentStream({
+          model: 'gemini-3-flash-preview',
+          contents: history,
+          config: {
+            systemInstruction: "Eres el asistente virtual de soporte para la nueva Plataforma Adaptativa de Whirlpool. Tu ÚNICA función es ayudar a los usuarios a navegar por esta plataforma, usar sus funciones y entender su interfaz. Tu ÚNICA fuente de verdad es el texto proporcionado bajo la etiqueta [CONTEXTO DE LA PLATAFORMA]. Si el usuario pregunta algo que no está en ese contexto (incluso si es sobre electrodomésticos Whirlpool, reparaciones, o temas externos), tienes estrictamente prohibido inventar o adivinar. Responde siempre: Lo siento, solo puedo ayudarte con dudas sobre el uso y las funciones de esta plataforma adaptativa.",
+          }
+        });
+      } catch (streamError) {
+        throw streamError;
+      }
+
+      let streamedText = '';
+
+      for await (const chunk of stream) {
+        const chunkText = chunk.text ?? '';
+        if (!chunkText) {
+          continue;
         }
-      });
 
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: response.text || "Lo siento, no pude procesar tu solicitud en este momento.",
-        timestamp: new Date()
-      };
+        streamedText += chunkText;
+        setMessages((prev) =>
+          prev.map((message) =>
+            message.id === assistantMessageId
+              ? {
+                  ...message,
+                  content: streamedText
+                }
+              : message
+          )
+        );
+      }
 
-      setMessages(prev => [...prev, assistantMessage]);
+      const finalText = streamedText.trim() || "Lo siento, no pude procesar tu solicitud en este momento.";
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === assistantMessageId
+            ? {
+                ...message,
+                content: finalText
+              }
+            : message
+        )
+      );
     } catch (error) {
       console.error("Gemini API Error:", error);
       const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: assistantMessageId,
         role: 'assistant',
         content: "Hubo un error al conectar con el servicio de IA. Por favor, intenta de nuevo más tarde.",
         timestamp: new Date()
       };
-      setMessages(prev => [...prev, errorMessage]);
+      setMessages((prev) =>
+        prev.map((message) => (message.id === assistantMessageId ? errorMessage : message))
+      );
     } finally {
       setIsTyping(false);
     }
@@ -123,22 +170,32 @@ export default function AIAssistantPage() {
                 : 'bg-white border border-slate-200 text-on-surface'
               }`}>
                 {msg.role === 'assistant' ? (
-                  <div className="text-sm sm:text-base leading-relaxed text-slate-700">
+                  <div className="prose prose-slate prose-sm sm:prose-base max-w-none prose-headings:text-on-surface prose-p:text-slate-700 prose-li:text-slate-700 prose-strong:text-on-surface prose-a:text-primary prose-a:no-underline hover:prose-a:underline prose-table:text-sm prose-table:my-0 prose-th:bg-slate-50 prose-th:font-bold prose-th:text-slate-700 prose-td:align-top prose-td:text-slate-700 prose-code:text-primary prose-code:bg-slate-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded-md prose-pre:bg-slate-950 prose-pre:text-slate-100 prose-pre:rounded-xl prose-pre:border prose-pre:border-slate-200 prose-pre:p-4 prose-blockquote:border-primary/30 prose-blockquote:text-slate-600">
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
-                        h1: ({ children }) => <h1 className="text-lg sm:text-xl font-black text-on-surface mt-2 mb-3">{children}</h1>,
-                        h2: ({ children }) => <h2 className="text-base sm:text-lg font-bold text-on-surface mt-2 mb-2">{children}</h2>,
-                        h3: ({ children }) => <h3 className="text-sm sm:text-base font-bold text-on-surface mt-2 mb-2">{children}</h3>,
-                        p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                        ul: ({ children }) => <ul className="list-disc pl-5 mb-2 space-y-1">{children}</ul>,
-                        ol: ({ children }) => <ol className="list-decimal pl-5 mb-2 space-y-1">{children}</ol>,
-                        li: ({ children }) => <li className="leading-relaxed">{children}</li>,
-                        strong: ({ children }) => <strong className="font-bold text-on-surface">{children}</strong>,
-                        code: ({ children }) => <code className="px-1.5 py-0.5 rounded bg-slate-100 text-[13px] text-primary">{children}</code>,
-                        blockquote: ({ children }) => <blockquote className="border-l-4 border-primary/30 pl-3 italic text-slate-600 my-2">{children}</blockquote>,
+                        h1: ({ children }) => <h1>{children}</h1>,
+                        h2: ({ children }) => <h2>{children}</h2>,
+                        h3: ({ children }) => <h3>{children}</h3>,
+                        p: ({ children }) => <p>{children}</p>,
+                        ul: ({ children }) => <ul>{children}</ul>,
+                        ol: ({ children }) => <ol>{children}</ol>,
+                        li: ({ children }) => <li>{children}</li>,
+                        strong: ({ children }) => <strong>{children}</strong>,
+                        em: ({ children }) => <em>{children}</em>,
+                        code: ({ className, children, ...props }: any) =>
+                          <code className={className} {...props}>
+                            {children}
+                          </code>,
+                        blockquote: ({ children }) => <blockquote>{children}</blockquote>,
+                        table: ({ children }) => <table>{children}</table>,
+                        thead: ({ children }) => <thead>{children}</thead>,
+                        tbody: ({ children }) => <tbody>{children}</tbody>,
+                        tr: ({ children }) => <tr>{children}</tr>,
+                        th: ({ children }) => <th>{children}</th>,
+                        td: ({ children }) => <td>{children}</td>,
                         a: ({ href, children }) => (
-                          <a href={href} target="_blank" rel="noreferrer" className="text-primary underline underline-offset-2 hover:text-accent-blue">
+                          <a href={href} target="_blank" rel="noreferrer">
                             {children}
                           </a>
                         ),
@@ -156,15 +213,7 @@ export default function AIAssistantPage() {
               </div>
             </div>
           ))}
-          {isTyping && (
-            <div className="flex justify-start">
-              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex gap-1">
-                <span className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce"></span>
-                <span className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce [animation-delay:0.2s]"></span>
-                <span className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce [animation-delay:0.4s]"></span>
-              </div>
-            </div>
-          )}
+          {isTyping && <ThinkingIndicator />}
           <div ref={messagesEndRef} />
         </div>
       </div>
