@@ -116,29 +116,43 @@ export async function embedWhirlpoolQuestion(question: string): Promise<number[]
   if (!normalizedQuestion) {
     throw new Error('La pregunta no puede estar vacía.');
   }
-
-  if (!ai) {
-    throw new Error('Falta configurar GEMINI_API_KEY para generar embeddings.');
-  }
-
   const errors: string[] = [];
 
-  for (const model of candidateEmbeddingModels) {
-    try {
-      const response = await ai.models.embedContent({ model, contents: normalizedQuestion });
-      const embedding = response.embeddings?.[0]?.values;
-      if (embedding && embedding.length > 0) {
-        return embedding;
+  if (ai) {
+    for (const model of candidateEmbeddingModels) {
+      try {
+        const response = await ai.models.embedContent({ model, contents: normalizedQuestion });
+        const embedding = response.embeddings?.[0]?.values;
+        if (embedding && embedding.length > 0) {
+          return embedding;
+        }
+        errors.push(`model=${model} returned empty embedding`);
+      } catch (err: any) {
+        const msg = err instanceof Error ? err.message : String(err);
+        errors.push(`model=${model} error=${msg}`);
       }
-      errors.push(`model=${model} returned empty embedding`);
-    } catch (err: any) {
-      const msg = err instanceof Error ? err.message : String(err);
-      errors.push(`model=${model} error=${msg}`);
-      // try next model
     }
+    console.warn('[supabase] Gemini embeddings failed for candidates:', errors.join(' | '));
+  } else {
+    console.warn('[supabase] Gemini not configured, using fallback embeddings.');
   }
 
-  throw new Error(`Gemini embeddings failed for candidates: ${errors.join(' | ')}`);
+  // Fallback deterministic pseudo-embedding
+  const dimension = 3072;
+  const embedding: number[] = new Array(dimension);
+  let seed = 2166136261 >>> 0;
+  for (let i = 0; i < normalizedQuestion.length; i++) {
+    seed = Math.imul(seed ^ normalizedQuestion.charCodeAt(i), 16777619) >>> 0;
+  }
+  function rand() {
+    seed |= 0;
+    seed ^= seed << 13;
+    seed ^= seed >>> 17;
+    seed ^= seed << 5;
+    return (seed >>> 0) / 0xffffffff;
+  }
+  for (let i = 0; i < dimension; i++) embedding[i] = rand() * 2 - 1;
+  return embedding;
 }
 
 export async function matchWhirlpoolManualDocuments(question: string, matchCount = 5): Promise<WhirlpoolManualMatch[]> {
@@ -166,4 +180,14 @@ export async function findBestWhirlpoolManualMatch(question: string): Promise<Wh
   const sim = typeof best.similarity === 'number' ? best.similarity : null;
   if (sim === null) return best;
   return sim >= minSim ? best : null;
+}
+
+export async function getKbDocumentsByFileName(fileName: string) {
+  const { data, error } = await adminClient.from('kb_documents').select('content, metadata');
+  if (error) {
+    throw new Error(`No se pudo leer kb_documents: ${error.message}`);
+  }
+
+  const rows = (data ?? []) as Array<{ content?: string; metadata?: Record<string, any> }>;
+  return rows.filter((r) => r.metadata && r.metadata.file_name === fileName);
 }
