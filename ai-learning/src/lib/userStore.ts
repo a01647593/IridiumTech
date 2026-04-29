@@ -1,3 +1,5 @@
+import { supabase } from './supabaseClient';
+
 export type TeamUser = {
   id: string;
   name: string;
@@ -62,4 +64,53 @@ export function deleteStoredTeamUser(userId: string) {
   const nextUsers = getStoredTeamUsers().filter((user) => user.id !== userId);
   saveStoredTeamUsers(nextUsers);
   return nextUsers;
+}
+
+export async function fetchTeamUsersFromSupabase(): Promise<TeamUser[]> {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select(`
+        id,
+        nombre,
+        email,
+        department_id,
+        departments (
+          name
+        ),
+        user_roles (
+          roles (
+            name
+          )
+        )
+      `);
+
+    if (error) {
+      console.error('Error fetching users:', error);
+      return getStoredTeamUsers();
+    }
+
+    if (!data) return getStoredTeamUsers();
+
+    return data.map((user: any) => {
+      const roleName = user.user_roles?.[0]?.roles?.name ?? 'user';
+      const normalizedRole = roleName.toLowerCase().includes('super') 
+        ? 'super-admin'
+        : roleName.toLowerCase().includes('content') || roleName.toLowerCase().includes('admin')
+        ? 'content-admin'
+        : 'user';
+
+      return {
+        id: user.id,
+        name: user.nombre || 'Sin nombre',
+        email: user.email,
+        area: user.departments?.name || 'General',
+        role: normalizedRole,
+        status: user.empleado_verificado ? 'Activo' : 'Inactivo',
+      };
+    });
+  } catch (error) {
+    console.error('Error in fetchTeamUsersFromSupabase:', error);
+    return getStoredTeamUsers();
+  }
 }

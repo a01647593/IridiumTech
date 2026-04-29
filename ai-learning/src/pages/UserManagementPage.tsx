@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { addStoredTeamUser, deleteStoredTeamUser, getStoredTeamUsers, saveStoredTeamUsers, type TeamUser } from '../lib/userStore';
+import { addStoredTeamUser, deleteStoredTeamUser, getStoredTeamUsers, saveStoredTeamUsers, fetchTeamUsersFromSupabase, type TeamUser } from '../lib/userStore';
 
 type UserFilter = 'all' | 'admins' | 'inactive';
 
@@ -20,7 +20,12 @@ export default function UserManagementPage() {
   });
 
   useEffect(() => {
-    setUsers(getStoredTeamUsers());
+    const loadUsers = async () => {
+      const dbUsers = await fetchTeamUsersFromSupabase();
+      setUsers(dbUsers);
+    };
+    loadUsers();
+    
     try {
       const raw = localStorage.getItem('whirlpool_user');
       if (raw) {
