@@ -11,9 +11,14 @@ interface Message {
   timestamp: Date;
 }
 
+const sanitizeEnvValue = (value: unknown) => {
+  if (typeof value !== 'string') return '';
+  return value.trim().replace(/^['"]|['"]$/g, '');
+};
+
 const geminiApiKey =
-  (import.meta as { env?: Record<string, string> }).env?.VITE_GEMINI_API_KEY ||
-  (process.env as { GEMINI_API_KEY?: string }).GEMINI_API_KEY ||
+  sanitizeEnvValue((import.meta as { env?: Record<string, string> }).env?.VITE_GEMINI_API_KEY) ||
+  sanitizeEnvValue((process.env as { GEMINI_API_KEY?: string }).GEMINI_API_KEY) ||
   '';
 
 const ai = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
