@@ -12,6 +12,38 @@ const normalizeRole = (value: unknown): UserRole => {
   return 'user';
 };
 
+const buildFallbackUser = (params: {
+  id: string;
+  email?: string | null;
+  name?: string | null;
+  avatarUrl?: string | null;
+}): User => {
+  const email = params.email ?? '';
+  const displayName =
+    params.name?.trim() ||
+    email.split('@')[0] ||
+    'Usuario Whirlpool';
+
+  return {
+    id: params.id,
+    email,
+    role: 'user',
+    name: displayName,
+    avatar: params.avatarUrl || `https://picsum.photos/seed/${params.id}/200/200`,
+    area: 'General',
+    gender: 'Other',
+    score: 0,
+    badges: [],
+    completedCourses: [],
+    completedCoursesDetailed: [],
+    pendingCourses: [],
+    streak: 0,
+    lastActivityDate: undefined,
+    completedQuizzesCount: 0,
+    savedPrompts: [],
+  };
+};
+
 export async function getUserProfile(userId: string): Promise<User | null> {
   try {
     const [
@@ -83,6 +115,24 @@ export async function getUserProfile(userId: string): Promise<User | null> {
     ]);
 
     if (userRes.error || !userRes.data) {
+      // SSO users may exist in auth but not yet in public.users; return fallback profile
+      // instead of forcing a redirect back to /login.
+      const { data: authData } = await supabase.auth.getUser();
+      const authUser = authData?.user;
+
+      if (authUser?.id === userId) {
+        return buildFallbackUser({
+          id: authUser.id,
+          email: authUser.email,
+          name:
+            (authUser.user_metadata?.full_name as string | undefined) ||
+            (authUser.user_metadata?.name as string | undefined) ||
+            null,
+          avatarUrl:
+            (authUser.user_metadata?.avatar_url as string | undefined) || null,
+        });
+      }
+
       console.error(userRes.error);
       return null;
     }
