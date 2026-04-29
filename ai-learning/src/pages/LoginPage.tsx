@@ -65,7 +65,9 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       });
 
       if (error || !data.user) {
-        setErrors({ credentials: 'Correo o contraseña incorrectos.' });
+        setErrors({
+          credentials: error?.message || 'Correo o contraseña incorrectos.'
+        });
         return;
       }
 
@@ -100,8 +102,9 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
 
       onLogin(loggedInUser);
 
-    } catch {
-      setErrors({ credentials: 'No se pudo conectar con el servicio de autenticación.' });
+    } catch (caughtError) {
+      const message = caughtError instanceof Error ? caughtError.message : 'No se pudo conectar con el servicio de autenticación.';
+      setErrors({ credentials: message });
     } finally {
       setLoading(false);
     }
