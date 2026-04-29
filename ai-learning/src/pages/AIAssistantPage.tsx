@@ -23,6 +23,32 @@ const geminiApiKey =
 
 const ai = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
 
+const fallbackAssistantReply = (userMessage: string) => {
+  const normalized = userMessage.trim().toLowerCase();
+
+  if (/qu[ií]en eres|qui[eé]n eres|c[oó]mo me ayudas|procesos|whirlpool/.test(normalized)) {
+    return [
+      'Soy la Gema de Ingeniería de Whirlpool y te ayudo a navegar esta plataforma adaptativa.',
+      'Puedo orientarte sobre el Dashboard, el catálogo de cursos, la biblioteca de gemas, el leaderboard, el asistente IA y tu perfil.',
+      'Si quieres, dime qué sección necesitas y te explico cómo usarla.'
+    ].join('\n\n');
+  }
+
+  if (/perfil|avatar|foto|racha|xp|insignia/.test(normalized)) {
+    return 'En Perfil puedes ver tus estadísticas, editar tu avatar, revisar tus insignias y consultar tus cursos completados.';
+  }
+
+  if (/curso|cursos|cat[aá]logo/.test(normalized)) {
+    return 'En el Catálogo de Cursos puedes explorar los cursos disponibles, revisar sus detalles y entrar a cada lección desde la plataforma.';
+  }
+
+  if (/ayuda|faq|soporte|dudas/.test(normalized)) {
+    return 'El Centro de Ayuda reúne la información de uso de la plataforma. Si me dices la sección exacta, te indico dónde encontrarla.';
+  }
+
+  return 'Puedo ayudarte a navegar la plataforma adaptativa: usa el menú lateral para ir a Dashboard, Cursos, Biblioteca de Gemas, Leaderboard, Asistente IA, Ayuda o Perfil. Si quieres, dime una sección y te digo qué hace.';
+};
+
 export default function AIAssistantPage() {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -93,13 +119,30 @@ export default function AIAssistantPage() {
         parts: [{ text: input }]
       });
 
-      const stream = await ai.models.generateContentStream({
-        model: "gemini-3-flash-preview",
-        contents: history,
-        config: {
-          systemInstruction: "Identidad: Eres el Asistente Experto de Whirlpool México. Restricciones: SOLO puedes responder dudas sobre instalación, mantenimiento y errores de línea blanca Whirlpool. Comportamiento: Si el usuario pregunta algo no relacionado (política, otras marcas, ocio), responde: <Lo siento, como asistente de Whirlpool solo puedo ayudarte con temas relacionados a nuestros productos>. Estilo: Usa un tono profesional, amable y estructurado con puntos clave",
+      let stream;
+      try {
+        stream = await ai.models.generateContentStream({
+          model: 'gemini-3-flash-preview',
+          contents: history,
+          config: {
+            systemInstruction: "Eres el asistente virtual de soporte para la nueva Plataforma Adaptativa de Whirlpool. Tu ÚNICA función es ayudar a los usuarios a navegar por esta plataforma, usar sus funciones y entender su interfaz. Tu ÚNICA fuente de verdad es el texto proporcionado bajo la etiqueta [CONTEXTO DE LA PLATAFORMA]. Si el usuario pregunta algo que no está en ese contexto (incluso si es sobre electrodomésticos Whirlpool, reparaciones, o temas externos), tienes estrictamente prohibido inventar o adivinar. Responde siempre: Lo siento, solo puedo ayudarte con dudas sobre el uso y las funciones de esta plataforma adaptativa.",
+          }
+        });
+      } catch (streamError) {
+        const message = streamError instanceof Error ? streamError.message : String(streamError);
+        if (message.includes('429') || message.toLowerCase().includes('quota')) {
+          const fallbackText = fallbackAssistantReply(input);
+          setMessages((prev) =>
+            prev.map((messageItem) =>
+              messageItem.id === assistantMessageId
+                ? { ...messageItem, content: fallbackText }
+                : messageItem
+            )
+          );
+          return;
         }
-      });
+        throw streamError;
+      }
 
       let streamedText = '';
 
@@ -135,6 +178,20 @@ export default function AIAssistantPage() {
       );
     } catch (error) {
       console.error("Gemini API Error:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('429') || message.toLowerCase().includes('quota')) {
+        const fallbackText = fallbackAssistantReply(input);
+        const errorMessage: Message = {
+          id: assistantMessageId,
+          role: 'assistant',
+          content: fallbackText,
+          timestamp: new Date()
+        };
+        setMessages((prev) =>
+          prev.map((messageItem) => (messageItem.id === assistantMessageId ? errorMessage : messageItem))
+        );
+        return;
+      }
       const errorMessage: Message = {
         id: assistantMessageId,
         role: 'assistant',
