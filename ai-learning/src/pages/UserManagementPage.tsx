@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { addStoredTeamUser, deleteStoredTeamUser, getStoredTeamUsers, saveStoredTeamUsers, fetchTeamUsersFromSupabase, type TeamUser } from '../lib/userStore';
+import { addStoredTeamUser, getStoredTeamUsers, saveStoredTeamUsers, fetchTeamUsersFromSupabase, updateUserRoleInSupabase, updateUserAreaInSupabase, reactivateUserInSupabase, type TeamUser } from '../lib/userStore';
 
 type UserFilter = 'all' | 'admins' | 'inactive';
 
@@ -59,10 +59,37 @@ export default function UserManagementPage() {
     setShowUserModal(true);
   };
 
-  const handleSaveUser = () => {
+  const handleSaveUser = async () => {
     if (!formUser.name.trim() || !formUser.email.trim()) return;
 
     if (editingUser) {
+      // Si cambió el rol, actualizar en Supabase
+      if (editingUser.role !== formUser.role) {
+        const updated = await updateUserRoleInSupabase(editingUser.id, formUser.role);
+        if (!updated) {
+          alert('Error al actualizar el rol en la base de datos');
+          return;
+        }
+      }
+
+      // Si cambió el área, actualizar en Supabase
+      if (editingUser.area !== formUser.area) {
+        const updated = await updateUserAreaInSupabase(editingUser.id, formUser.area);
+        if (!updated) {
+          alert('Error al actualizar el área en la base de datos');
+          return;
+        }
+      }
+
+      // Si cambió el estado de Inactivo a Activo, reactivar
+      if (editingUser.status === 'Inactivo' && formUser.status === 'Activo') {
+        const updated = await reactivateUserInSupabase(editingUser.id);
+        if (!updated) {
+          alert('Error al reactivar usuario en la base de datos');
+          return;
+        }
+      }
+
       const nextUsers = users.map((user) => (user.id === editingUser.id ? { ...user, ...formUser } : user));
       setUsers(nextUsers);
       saveStoredTeamUsers(nextUsers);
@@ -75,12 +102,6 @@ export default function UserManagementPage() {
     setShowUserModal(false);
   };
 
-  const handleDeleteUser = (userId: string) => {
-    if (!window.confirm('Quieres quitar a esta persona del equipo?')) return;
-    const nextUsers = deleteStoredTeamUser(userId);
-    setUsers(nextUsers);
-  };
-
   const filteredUsers = users.filter((user) => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
     const matchesSearch =
@@ -90,8 +111,8 @@ export default function UserManagementPage() {
       user.area.toLowerCase().includes(normalizedSearch);
 
     const matchesFilter =
-      activeFilter === 'all' ||
-      (activeFilter === 'admins' && (user.role === 'content-admin' || user.role === 'super-admin')) ||
+      (activeFilter === 'all' && user.status === 'Activo') ||
+      (activeFilter === 'admins' && (user.role === 'content-admin' || user.role === 'super-admin') && user.status === 'Activo') ||
       (activeFilter === 'inactive' && user.status === 'Inactivo');
 
     return matchesSearch && matchesFilter;
@@ -209,9 +230,6 @@ export default function UserManagementPage() {
                       >
                         <span className="material-symbols-outlined text-sm">edit</span>
                       </button>
-                      <button onClick={() => handleDeleteUser(user.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors">
-                        <span className="material-symbols-outlined text-sm">block</span>
-                      </button>
                     </div>
                   </td>
                 </tr>
@@ -284,9 +302,11 @@ export default function UserManagementPage() {
                     >
                       <option>Ingeniería</option>
                       <option>Marketing</option>
+                      <option>Finanzas</option>
                       <option>HR</option>
                       <option>Operaciones</option>
-                      <option>Innovación</option>
+                      <option>Innovacion</option>
+                      <option>General</option>
                     </select>
                   </div>
                   <div className="space-y-2">
