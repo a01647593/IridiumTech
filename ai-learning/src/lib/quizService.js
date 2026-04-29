@@ -1,100 +1,154 @@
-import { query } from './db.js';
+import { supabase } from './supabaseClient';
 
-export async function getLeccion(leccionId, usuarioId) {
-  const rows = await query(
-    `SELECT l.id, l.titulo, l.orden, l.fechaLimite,
-            c.id AS cursoId, c.titulo AS cursoTitulo
-     FROM Leccion l
-     JOIN Curso c ON c.id = l.cursoId
-     JOIN AsignacionCurso ac ON ac.cursoId = c.id AND ac.usuarioId = ?
-     WHERE l.id = ? AND c.activo = 1 LIMIT 1`,
-    [usuarioId, leccionId]
-  );
-  return rows[0] || null;
+export async function getQuizByLesson(lessonId) {
+  const { data: quiz, error: quizError } = await supabase
+    .from('quizzes')
+    .select(`
+      id,
+      title
+    `)
+    .eq('lesson_id', lessonId)
+    .single();
+
+  if (quizError) throw new Error(quizError.message);
+  if (!quiz) return null;
+
+  const { data: questions, error: questionError } = await supabase
+    .from('questions')
+    .select(`
+      id,
+      question_text,
+      type,
+      answers (
+        id,
+        answer_text,
+        is_correct
+      )
+    `)
+    .eq('quiz_id', quiz.id);
+
+  if (questionError) throw new Error(questionError.message);
+
+  const normalizedQuestions = (questions || []).map((q, idx) => ({
+    id: q.id,
+    texto: q.question_text,
+    orden: idx + 1,
+    opciones: (q.answers || []).map((a) => ({
+      id: a.id,
+      texto: a.answer_text,
+      esCorrecta: a.is_correct,
+    })),
+  }));
+
+  return {
+    quizId: quiz.id,
+    leccion: {
+      id: lessonId,
+      titulo: quiz.title || 'Quiz',
+    },
+    preguntas: normalizedQuestions,
+  };
 }
 
-export async function getPreguntasByLeccion(leccionId) {
-  return query(
-    `SELECT id, texto, orden FROM Pregunta
-     WHERE leccionId = ? ORDER BY orden`,
-    [leccionId]
-  );
+export async function createAttempt(userId, lessonId, quizId) {
+  const { data, error } = await supabase
+    .from('attempts')
+    .insert({
+      user_id: userId,
+      lesson_id: lessonId,
+      quiz_id: quizId,
+      score: 0,
+      lives_left: 3,
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  return data;
 }
 
-export async function getOpciones(preguntaIds) {
-  if (!preguntaIds.length) return [];
-  const ph = preguntaIds.map(() => '?').join(',');
-  return query(
-    `SELECT id, preguntaId, texto, esCorrecta, explicacion
-     FROM OpcionPregunta WHERE preguntaId IN (${ph})`,
-    preguntaIds
-  );
-}
+export async function finishAttempt(attemptId, respuestasSeleccionadas = []) {
+  if (!attemptId) return { porcentaje: 0 };
 
-export async function crearSesionExamen(usuarioId, leccionId) {
-  const result = await query(
-    `INSERT INTO SesionExamen (usuarioId, leccionId, iniciada)
-     VALUES (?, ?, NOW())`,
-    [usuarioId, leccionId]
-  );
-  return result.insertId;
-}
+  let correctCount = 0;
 
-export async function getSesionExamen(sesionId, usuarioId) {
-  const rows = await query(
-    `SELECT * FROM SesionExamen WHERE id = ? AND usuarioId = ? LIMIT 1`,
-    [sesionId, usuarioId]
-  );
-  return rows[0] || null;
-}
+  const rowsToInsert = respuestasSeleccionadas.map((r) => {
+    if (r.esCorrecta) correctCount++;
 
-export async function guardarRespuestas(sesionId, respuestas) {
-  if (!respuestas.length) return [];
-  const opcionIds = respuestas.map(r => r.opcionId);
-  const ph = opcionIds.map(() => '?').join(',');
-  const opciones = await query(
-    `SELECT id, preguntaId, esCorrecta, explicacion
-     FROM OpcionPregunta WHERE id IN (${ph})`,
-    opcionIds
-  );
-  const opcionMap = new Map(opciones.map(o => [o.id, o]));
-  const resultado = [];
-  for (const r of respuestas) {
-    const op = opcionMap.get(r.opcionId);
-    if (!op) continue;
-    await query(
-      `INSERT INTO RespuestaUsuario (sesionId, preguntaId, opcionId, esCorrecta)
-       VALUES (?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE opcionId=VALUES(opcionId), esCorrecta=VALUES(esCorrecta)`,
-      [sesionId, r.preguntaId, r.opcionId, op.esCorrecta ? 1 : 0]
-    );
-    resultado.push({
-      preguntaId: r.preguntaId,
-      opcionId: r.opcionId,
-      esCorrecta: !!op.esCorrecta,
-      explicacion: op.explicacion,
-    });
+    return {
+      attempt_id: attemptId,
+      question_id: r.preguntaId,
+      answer_id: r.opcionId,
+      is_correct: r.esCorrecta,
+    };
+  });
+
+  if (rowsToInsert.length > 0) {
+    const { error: answerError } = await supabase
+      .from('attempt_answers')
+      .insert(rowsToInsert);
+
+    if (answerError) throw new Error(answerError.message);
   }
-  return resultado;
+
+  const porcentaje = Math.round((correctCount / respuestasSeleccionadas.length) * 100);
+
+  const { error: updateError } = await supabase
+    .from('attempts')
+    .update({
+      score: porcentaje,
+      completed_at: new Date().toISOString(),
+      lives_left: 3 - (respuestasSeleccionadas.length - correctCount),
+    })
+    .eq('id', attemptId);
+
+  if (updateError) throw new Error(updateError.message);
+
+  return { porcentaje };
 }
 
-export async function finalizarSesionExamen(sesionId, puntaje, total) {
-  await query(
-    `UPDATE SesionExamen SET finalizada=NOW(), puntaje=?, total=? WHERE id=?`,
-    [puntaje, total, sesionId]
-  );
-}
+export async function processUserRewards(userId, courseId, xpEarned, badgeNames = []) {
+  // 1. Guardar la XP en xp_logs
+  if (xpEarned > 0) {
+    const { error: xpError } = await supabase
+      .from('xp_logs')
+      .insert({
+        user_id: userId,
+        course_id: courseId, // Puede ser null si es un quiz independiente
+        action: 'quiz_completed',
+        xp: xpEarned
+      });
 
-export async function getRankingCurso(cursoId, limit = 10) {
-  return query(
-    `SELECT u.id AS usuarioId, u.nombre,
-            COALESCE(SUM(se.puntaje),0) AS puntajeTotal,
-            RANK() OVER (ORDER BY COALESCE(SUM(se.puntaje),0) DESC) AS posicion
-     FROM Usuario u
-     JOIN AsignacionCurso ac ON ac.usuarioId=u.id AND ac.cursoId=?
-     LEFT JOIN SesionExamen se ON se.usuarioId=u.id AND se.finalizada IS NOT NULL
-     GROUP BY u.id, u.nombre
-     ORDER BY puntajeTotal DESC LIMIT ?`,
-    [cursoId, limit]
-  );
+    if (xpError) console.error('Error insertando XP:', xpError.message);
+  }
+
+  // 2. Otorgar los logros/badges en user_achievements
+  if (badgeNames.length > 0) {
+    // Primero, buscamos los IDs reales de los logros usando sus nombres
+    const { data: achievements, error: fetchErr } = await supabase
+      .from('achievements')
+      .select('id, name')
+      .in('name', badgeNames);
+
+    if (fetchErr) {
+      console.error('Error buscando logros:', fetchErr.message);
+      return;
+    }
+
+    if (achievements && achievements.length > 0) {
+      const recordsToInsert = achievements.map(ach => ({
+        user_id: userId,
+        achievement_id: ach.id,
+        unlocked_at: new Date().toISOString()
+      }));
+
+      // Usamos upsert para no duplicar el logro si el usuario repite el quiz
+      const { error: achError } = await supabase
+        .from('user_achievements')
+        .upsert(recordsToInsert, { onConflict: 'user_id,achievement_id' });
+
+      if (achError) console.error('Error asignando logro:', achError.message);
+    }
+  }
 }

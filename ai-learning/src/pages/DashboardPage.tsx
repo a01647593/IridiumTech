@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { listCourses } from '../lib/courseService';
+import { getUserProfile } from '../lib/profileService'; // <-- Importamos tu servicio
 
 interface DashboardPageProps {
   user: any;
@@ -10,13 +11,22 @@ interface DashboardPageProps {
 export default function DashboardPage({ user }: DashboardPageProps) {
   const navigate = useNavigate();
   const [courses, setCourses] = useState<any[]>([]);
+  const [profile, setProfile] = useState<any>(null); // <-- Nuevo estado para el perfil
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadDashboard() {
       try {
-        const data = await listCourses({ usuarioId: user?.id, soloActivos: true });
-        setCourses(data);
+        if (!user?.id) return;
+        
+        // Ejecutamos ambas consultas en paralelo para mayor velocidad
+        const [coursesData, userProfile] = await Promise.all([
+          listCourses({ usuarioId: user.id, soloActivos: true }),
+          getUserProfile(user.id)
+        ]);
+        
+        setCourses(coursesData);
+        setProfile(userProfile);
       } catch (err) {
         console.error('Error cargando dashboard:', err);
       } finally {
@@ -24,7 +34,7 @@ export default function DashboardPage({ user }: DashboardPageProps) {
       }
     }
 
-    if (user?.id) loadDashboard();
+    loadDashboard();
   }, [user]);
 
   const pendingCourses = courses.filter(
@@ -39,9 +49,10 @@ export default function DashboardPage({ user }: DashboardPageProps) {
     (c) => c.progreso?.porcentaje === 100
   );
 
-  const userScore = completedCourses.length * 150 + pendingCourses.length * 50;
-  const userStreak = pendingCourses.length + 2;
-  const userBadges = completedCourses.length;
+  const userScore = profile?.score || 0;
+  const userStreak = profile?.streak || 0;
+  const userBadges = profile?.badges?.length || 0;
+  const userName = profile?.name || user?.name || user?.nombre || 'Usuario';
 
   if (loading) {
     return (
@@ -60,7 +71,7 @@ export default function DashboardPage({ user }: DashboardPageProps) {
             Mi Tablero de Aprendizaje
           </h1>
           <p className="text-slate-500 mt-2 font-medium">
-            Hola, {(user?.name || user?.nombre || 'Usuario').split(' ')[0]}. Tienes{' '}
+            Hola, {userName.split(' ')[0]}. Tienes{' '}
             {pendingCourses.length} cursos pendientes por completar.
           </p>
         </div>
@@ -116,7 +127,14 @@ export default function DashboardPage({ user }: DashboardPageProps) {
                     transition={{ delay: i * 0.1 }}
                     className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden hover:shadow-xl transition-all group"
                   >
-                    <div className="h-32 bg-gradient-to-r from-primary/80 to-indigo-500 relative">
+                    {/* Sustitución del gradiente por la miniatura real */}
+                    <div className="h-32 bg-slate-100 relative">
+                      <img 
+                        src={course.thumbnail || `https://picsum.photos/seed/${course.id}/600/300`} 
+                        alt={course.title}
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/10"></div>
                       <div className="absolute bottom-4 left-6">
                         <span className="px-2 py-1 bg-white/20 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-widest rounded-md border border-white/20">
                           Curso Activo
@@ -126,7 +144,7 @@ export default function DashboardPage({ user }: DashboardPageProps) {
 
                     <div className="p-6">
                       <h3 className="font-bold text-on-surface mb-2 truncate">{course.title}</h3>
-                      <p className="text-xs text-slate-500 mb-4">{course.description}</p>
+                      <p className="text-xs text-slate-500 mb-4 truncate">{course.description}</p>
 
                       <div className="space-y-4">
                         <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-slate-400">
@@ -170,7 +188,14 @@ export default function DashboardPage({ user }: DashboardPageProps) {
                     whileHover={{ y: -5 }}
                     className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex gap-4 items-center"
                   >
-                    <div className="w-20 h-20 rounded-2xl bg-gradient-to-r from-primary to-indigo-500 flex-shrink-0"></div>
+                    {/* Sustitución del gradiente pequeño por la miniatura */}
+                    <div className="w-20 h-20 rounded-2xl overflow-hidden bg-slate-100 flex-shrink-0">
+                      <img 
+                        src={course.thumbnail || `https://picsum.photos/seed/${course.id}/200/200`} 
+                        alt={course.title}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
 
                     <div className="flex-1 min-w-0">
                       <h4 className="font-bold text-on-surface truncate">{course.title}</h4>

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MOCK_PROMPTS } from '../constants';
-import { addStoredCourse, createDefaultQuizTemplate, deleteStoredCourse, getStoredCourses, type CourseDraft, updateStoredCourse } from '../lib/courseStore';
+import { fetchCoursesDeep, createCourseDB, deleteCourseDB, addLessonDB, deleteLessonDB, type CourseDraft, syncQuizDB } from '../lib/courseService';
 import type { Course } from '../types';
+import { supabase } from '../lib/supabaseClient';
 
 export default function ContentManagementPage() {
   const [showCourseModal, setShowCourseModal] = useState(false);
@@ -27,21 +28,92 @@ export default function ContentManagementPage() {
   });
 
   useEffect(() => {
-    setCourses(getStoredCourses());
+    loadCourses();
   }, []);
-
-  const handleDeleteCourse = (courseId: string) => {
-    if (!window.confirm('Quieres eliminar este curso?')) return;
-    const nextCourses = deleteStoredCourse(courseId);
-    setCourses(nextCourses);
+  
+  const loadCourses = async () => {
+    try {
+      const dbCourses = await fetchCoursesDeep();
+      setCourses(dbCourses);
+    } catch (error) {
+      console.error('Error cargando cursos:', error);
+    }
   };
 
-  const handleCreateCourse = () => {
+  const persistEditedCourse = (nextCourse: Course) => {
+    setEditingCourse(nextCourse);
+  };
+
+  const createDefaultQuizTemplate = (moduleTitle: string) => ({
+    id: `q-new-${Date.now()}`,
+    title: `Quiz: ${moduleTitle}`,
+    questions: [
+      {
+        id: `q-${Date.now()}`,
+        question: 'Pregunta de prueba',
+        options: ['Opción 1', 'Opción 2', 'Opción 3', 'Opción 4'],
+        correctAnswer: 0,
+      }
+    ]
+  });
+
+  const handleSaveAllChanges = async () => {
+    if (!editingCourse) return;
+    
+    try {
+      for (const module of editingCourse.modules) {
+        await syncQuizDB(module.id, module.quiz);
+      }
+      
+      await loadCourses();
+      alert('Cambios guardados con éxito');
+      setShowEditCourseModal(false);
+    } catch (error) {
+      console.error('Error guardando los cambios del curso:', error);
+      alert('Hubo un error al guardar los cambios.');
+    }
+  };
+
+  const handleDeleteCourse = async (courseId: string) => {
+    if (!window.confirm('Quieres eliminar este curso?')) return;
+  
+    try {
+      await deleteCourseDB(courseId);
+      await loadCourses();
+    } catch (error) {
+      console.error('Error eliminando curso:', error);
+      alert('No se pudo eliminar el curso.');
+    }
+  };
+
+  const handleCreateCourse = async () => {
     if (!courseDraft.title.trim() || !courseDraft.description.trim()) return;
-    const createdCourse = addStoredCourse(courseDraft);
-    setCourses((current) => [createdCourse, ...current]);
-    setShowCourseModal(false);
-    setCourseDraft({ title: '', description: '', area: 'Ingeniería', level: 'Intermedio', thumbnail: '' });
+  
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+  
+      if (!user) {
+        alert('No se pudo identificar el usuario actual.');
+        return;
+      }
+  
+      await createCourseDB(courseDraft, user.id);
+      await loadCourses();
+  
+      setShowCourseModal(false);
+      setCourseDraft({
+        title: '',
+        description: '',
+        area: 'Ingeniería',
+        level: 'Intermedio',
+        thumbnail: '',
+      });
+    } catch (error) {
+      console.error('Error creando curso:', error);
+      alert('No se pudo crear el curso.');
+    }
   };
 
   const handleThumbnailUpload = (file?: File) => {
@@ -59,42 +131,46 @@ export default function ContentManagementPage() {
     setShowEditCourseModal(true);
   };
 
-  const persistEditedCourse = (nextCourse: Course) => {
-    setEditingCourse(nextCourse);
-    setCourses((current) => current.map((course) => (course.id === nextCourse.id ? nextCourse : course)));
-    updateStoredCourse(nextCourse.id, nextCourse);
-  };
-
-  const handleAddModule = () => {
+  const handleAddModule = async () => {
     if (!editingCourse || !moduleDraft.title.trim()) return;
-
-    const resources = [
-      moduleDraft.pdfUrl.trim()
-        ? { id: `pdf-${Date.now()}`, type: 'pdf' as const, label: 'Material PDF', url: moduleDraft.pdfUrl.trim() }
-        : null,
-      moduleDraft.videoUrl.trim()
-        ? { id: `video-${Date.now()}`, type: 'video' as const, label: 'Video del módulo', url: moduleDraft.videoUrl.trim() }
-        : null,
-    ].filter(Boolean) as Array<{ id: string; type: 'pdf' | 'video'; label: string; url: string }>;
-
-    const newModule = {
-      id: `m-${Date.now()}`,
-      title: moduleDraft.title.trim(),
-      completed: false,
-      duration: moduleDraft.duration.trim() || '45m',
-      resources,
-      quiz: moduleDraft.addQuiz ? createDefaultQuizTemplate(moduleDraft.title.trim()) : undefined,
-    };
-
-    const nextCourse = { ...editingCourse, modules: [...editingCourse.modules, newModule] };
-    persistEditedCourse(nextCourse);
-    setModuleDraft({ title: '', duration: '45m', pdfUrl: '', videoUrl: '', addQuiz: true });
+  
+    try {
+      await addLessonDB(String(editingCourse.id), moduleDraft);
+  
+      const refreshed = await fetchCoursesDeep();
+      setCourses(refreshed);
+  
+      const updatedEditing = refreshed.find((c) => String(c.id) === String(editingCourse.id)) || null;
+      setEditingCourse(updatedEditing);
+  
+      setModuleDraft({
+        title: '',
+        duration: '45m',
+        pdfUrl: '',
+        videoUrl: '',
+        addQuiz: true,
+      });
+    } catch (error) {
+      console.error('Error agregando módulo:', error);
+      alert('No se pudo agregar el módulo.');
+    }
   };
 
-  const handleDeleteModule = (moduleId: string) => {
+  const handleDeleteModule = async (moduleId: string) => {
     if (!editingCourse) return;
-    const nextCourse = { ...editingCourse, modules: editingCourse.modules.filter((module) => module.id !== moduleId) };
-    persistEditedCourse(nextCourse);
+  
+    try {
+      await deleteLessonDB(moduleId);
+  
+      const refreshed = await fetchCoursesDeep();
+      setCourses(refreshed);
+  
+      const updatedEditing = refreshed.find((c) => String(c.id) === String(editingCourse.id)) || null;
+      setEditingCourse(updatedEditing);
+    } catch (error) {
+      console.error('Error eliminando módulo:', error);
+      alert('No se pudo eliminar el módulo.');
+    }
   };
 
   const handleAttachDefaultQuiz = (moduleId: string) => {
@@ -759,14 +835,20 @@ export default function ContentManagementPage() {
                 </div>
               </div>
 
-              <div className="p-6 bg-slate-50 flex justify-end">
+              <div className="p-6 bg-slate-50 flex justify-end gap-4">
                 <button
                   onClick={() => setShowEditCourseModal(false)}
-                  className="px-6 py-3 bg-primary text-white text-sm font-bold rounded-xl shadow-lg shadow-primary/20 hover:scale-105 transition-all"
+                  className="px-6 py-3 text-sm font-bold text-slate-500 hover:text-on-surface transition-colors"
                 >
-                  Listo
+                  Cancelar
                 </button>
-              </div>
+              <button
+                  onClick={handleSaveAllChanges}
+                 className="px-6 py-3 bg-primary text-white text-sm font-bold rounded-xl shadow-lg shadow-primary/20 hover:scale-105 transition-all"
+               >
+                 Guardar Cambios
+               </button>
+             </div>
             </motion.div>
           </div>
         )}

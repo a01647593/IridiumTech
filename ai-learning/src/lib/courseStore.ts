@@ -1,3 +1,4 @@
+//Este archivo posiblemente se eliminara, pero lo mantengo antes de estar seguro
 import { MOCK_COURSES } from '../constants';
 import type { Course } from '../types';
 
