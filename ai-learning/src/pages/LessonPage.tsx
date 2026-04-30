@@ -112,7 +112,7 @@ export default function LessonPage({ user }: { user: any }) {
 
   const handleContinueQuiz = async () => {
     try {
-      await markLessonCompleted(lesson.id, user.id);
+      await markLessonCompleted(user.id, lesson.id);
       navigate(`/quiz/${lesson.id}`);
     } catch (err) {
       console.error(err);
