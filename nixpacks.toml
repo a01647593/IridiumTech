@@ -1,18 +1,8 @@
-[phases.setup]
-nixPkgs = ["nodejs"]
-
 [phases.install]
-cmds = [
-    "cd ai-learning",
-    "rm -rf node_modules package-lock.json",
-    "npm install"
-]
+cmds = ["npm install --prefix ai-learning"]
 
 [phases.build]
-cmds = [
-    "cd ai-learning",
-    "npm run build"
-]
+cmds = ["npm run build --prefix ai-learning"]
 
 [start]
 cmd = "npx serve -s ai-learning/dist -l 3000"
