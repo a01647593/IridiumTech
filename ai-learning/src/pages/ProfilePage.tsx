@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Badge } from '../types';
 import { MOCK_COURSES } from '../constants';
 import { updateUserProfile } from '../lib/profileUpdateService.ts';
 import { getUserProfile } from '../lib/profileService';
+import { listCourses } from '../lib/courseService';
+
 
 interface ProfilePageProps {
   user: User;
@@ -16,9 +18,29 @@ export default function ProfilePage({ user, onUserUpdated }: ProfilePageProps) {
   const [editAvatar, setEditAvatar] = useState(user.avatar);
   const [saving, setSaving] = useState(false);
 
-  const completedCourses = MOCK_COURSES.filter((c) =>
+  const [allRealCourses, setAllRealCourses] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        // Cargamos todos los cursos de la base de datos
+        const courses = await listCourses({ usuarioId: user.id, soloActivos: false });
+        setAllRealCourses(courses);
+      } catch (error) {
+        console.error("Error al cargar cursos en el perfil:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, [user.id]);
+
+  const completedCourses = allRealCourses.filter((c) =>
     user.completedCourses.includes(c.id)
   );
+
+  if (loading) return <div className="p-10 text-center">Cargando perfil...</div>;
 
   const handleSaveProfile = async () => {
     if (!editName.trim()) return;

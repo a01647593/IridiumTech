@@ -1,16 +1,20 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { addStoredTeamUser, deleteStoredTeamUser, getStoredTeamUsers, saveStoredTeamUsers, type TeamUser } from '../lib/userStore';
+// 1. Cambiamos la importación para usar nuestro nuevo servicio
+import { fetchAllUsers, updateUserRole, type TeamUser, updateUserDetails} from '../lib/userService';
 
 type UserFilter = 'all' | 'admins' | 'inactive';
 
-export default function UserManagementPage() {
+// Opcional: Recibir el usuario actual como prop (como en DashboardPage) para mayor seguridad
+export default function UserManagementPage({ currentUser }: { currentUser?: any }) {
   const [users, setUsers] = useState<TeamUser[]>([]);
   const [currentUserRole, setCurrentUserRole] = useState<TeamUser['role']>('user');
   const [activeFilter, setActiveFilter] = useState<UserFilter>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<TeamUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  
   const [formUser, setFormUser] = useState<Omit<TeamUser, 'id'>>({
     name: '',
     email: '',
@@ -19,18 +23,32 @@ export default function UserManagementPage() {
     status: 'Activo',
   });
 
+  // 2. Cargamos los usuarios desde Supabase al montar el componente
   useEffect(() => {
-    setUsers(getStoredTeamUsers());
-    try {
-      const raw = localStorage.getItem('whirlpool_user');
-      if (raw) {
-        const parsed = JSON.parse(raw) as { role?: TeamUser['role'] };
-        setCurrentUserRole(parsed.role ?? 'user');
+    loadUsers();
+    
+    // Determinamos el rol del usuario que está viendo la página
+    if (currentUser?.role) {
+      setCurrentUserRole(currentUser.role);
+    } else {
+      try {
+        const raw = localStorage.getItem('whirlpool_user');
+        if (raw) {
+          const parsed = JSON.parse(raw) as { role?: TeamUser['role'] };
+          setCurrentUserRole(parsed.role ?? 'user');
+        }
+      } catch {
+        setCurrentUserRole('user');
       }
-    } catch {
-      setCurrentUserRole('user');
     }
-  }, []);
+  }, [currentUser]);
+
+  const loadUsers = async () => {
+    setLoading(true);
+    const data = await fetchAllUsers();
+    setUsers(data);
+    setLoading(false);
+  };
 
   const roleOptions: Array<{ value: TeamUser['role']; label: string }> = currentUserRole === 'super-admin'
     ? [
@@ -54,26 +72,42 @@ export default function UserManagementPage() {
     setShowUserModal(true);
   };
 
-  const handleSaveUser = () => {
+  // 3. Modificamos el guardado para interactuar con Supabase
+  // UserManagementPage.tsx
+
+  const handleSaveUser = async () => {
     if (!formUser.name.trim() || !formUser.email.trim()) return;
-
-    if (editingUser) {
-      const nextUsers = users.map((user) => (user.id === editingUser.id ? { ...user, ...formUser } : user));
-      setUsers(nextUsers);
-      saveStoredTeamUsers(nextUsers);
-    } else {
-      const safeRole = currentUserRole === 'super-admin' ? formUser.role : 'user';
-      const newUser = addStoredTeamUser({ ...formUser, role: safeRole });
-      setUsers((current) => [newUser, ...current]);
+  
+    try {
+      if (editingUser) {
+        // 1. Actualizar datos básicos (Nombre, Email, Área, Estado)
+        await updateUserDetails(editingUser.id, {
+          name: formUser.name,
+          email: formUser.email,
+          area: formUser.area,
+          status: formUser.status
+        });
+  
+        // 2. Actualizar el rol solo si cambió
+        if (editingUser.role !== formUser.role) {
+          await updateUserRole(editingUser.id, formUser.role);
+        }
+        
+        alert('Usuario actualizado con éxito');
+        await loadUsers();
+      } else {
+        // Lógica de invitación...
+        alert('Función de invitación pendiente de implementar con Auth.');
+      }
+      setShowUserModal(false);
+    } catch (error: any) {
+      console.error('Error al guardar:', error);
+      alert(`No se pudo actualizar: ${error.message}`);
     }
-
-    setShowUserModal(false);
   };
 
   const handleDeleteUser = (userId: string) => {
-    if (!window.confirm('Quieres quitar a esta persona del equipo?')) return;
-    const nextUsers = deleteStoredTeamUser(userId);
-    setUsers(nextUsers);
+    alert('Por seguridad y trazabilidad, los usuarios deben desactivarse (cambiar estado a Inactivo) en lugar de eliminarse por completo de la base de datos.');
   };
 
   const filteredUsers = users.filter((user) => {
@@ -108,6 +142,7 @@ export default function UserManagementPage() {
       </header>
 
       <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
+        {/* Filtros e Inputs se mantienen igual */}
         <div className="p-8 border-b border-slate-50 flex flex-col xl:flex-row justify-between items-center gap-4">
           <div className="relative w-full xl:w-96">
             <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">search</span>
@@ -120,106 +155,83 @@ export default function UserManagementPage() {
             />
           </div>
           <div className="flex flex-wrap gap-2 w-full xl:w-auto">
-            <button
-              onClick={() => setActiveFilter('all')}
-              className={`flex-1 xl:flex-none px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-                activeFilter === 'all'
-                  ? 'bg-slate-50 text-slate-600'
-                  : 'bg-white border border-slate-100 text-slate-400 hover:bg-slate-50'
-              }`}
-            >
-              Todos
-            </button>
-            <button
-              onClick={() => setActiveFilter('admins')}
-              className={`flex-1 xl:flex-none px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${
-                activeFilter === 'admins'
-                  ? 'bg-slate-50 text-slate-600'
-                  : 'bg-white border border-slate-100 text-slate-400 hover:bg-slate-50'
-              }`}
-            >
-              Administradores
-            </button>
-            <button
-              onClick={() => setActiveFilter('inactive')}
-              className={`flex-1 xl:flex-none px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${
-                activeFilter === 'inactive'
-                  ? 'bg-slate-50 text-slate-600'
-                  : 'bg-white border border-slate-100 text-slate-400 hover:bg-slate-50'
-              }`}
-            >
-              Inactivos
-            </button>
+            <button onClick={() => setActiveFilter('all')} className={`flex-1 xl:flex-none px-4 py-2 text-xs font-bold rounded-lg transition-all ${activeFilter === 'all' ? 'bg-slate-50 text-slate-600' : 'bg-white border border-slate-100 text-slate-400 hover:bg-slate-50'}`}>Todos</button>
+            <button onClick={() => setActiveFilter('admins')} className={`flex-1 xl:flex-none px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${activeFilter === 'admins' ? 'bg-slate-50 text-slate-600' : 'bg-white border border-slate-100 text-slate-400 hover:bg-slate-50'}`}>Administradores</button>
+            <button onClick={() => setActiveFilter('inactive')} className={`flex-1 xl:flex-none px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${activeFilter === 'inactive' ? 'bg-slate-50 text-slate-600' : 'bg-white border border-slate-100 text-slate-400 hover:bg-slate-50'}`}>Inactivos</button>
           </div>
         </div>
         
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50">
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Usuario</th>
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Área</th>
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Rol</th>
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Estado</th>
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {filteredUsers.map((user, i) => (
-                <tr key={i} className="hover:bg-slate-50 transition-colors group">
-                  <td className="px-8 py-5">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 font-bold">
-                        {user.name.charAt(0)}
-                      </div>
-                      <div>
-                        <p className="font-bold text-on-surface">{user.name}</p>
-                        <p className="text-xs text-slate-400">{user.email}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-8 py-5">
-                    <p className="text-sm text-slate-500 font-medium">{user.area}</p>
-                  </td>
-                  <td className="px-8 py-5">
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                      user.role === 'super-admin' ? 'bg-purple-50 text-purple-600' :
-                      user.role === 'content-admin' ? 'bg-blue-50 text-blue-600' :
-                      'bg-slate-100 text-slate-500'
-                    }`}>
-                      {user.role}
-                    </span>
-                  </td>
-                  <td className="px-8 py-5">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${user.status === 'Activo' ? 'bg-green-500' : 'bg-slate-300'}`}></div>
-                      <span className="text-xs font-bold text-slate-500">{user.status}</span>
-                    </div>
-                  </td>
-                  <td className="px-8 py-5 text-right">
-                    <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button 
-                        onClick={() => handleOpenModal(user)}
-                        className="p-2 text-slate-400 hover:text-primary transition-colors"
-                      >
-                        <span className="material-symbols-outlined text-sm">edit</span>
-                      </button>
-                      <button onClick={() => handleDeleteUser(user.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors">
-                        <span className="material-symbols-outlined text-sm">block</span>
-                      </button>
-                    </div>
-                  </td>
+          {loading ? (
+             <div className="py-20 text-center text-slate-400 font-medium">Cargando usuarios...</div>
+          ) : (
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50">
+                  <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Usuario</th>
+                  <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Área</th>
+                  <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Rol</th>
+                  <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Estado</th>
+                  <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Acciones</th>
                 </tr>
-              ))}
-              {filteredUsers.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-8 py-10 text-center text-sm font-medium text-slate-400">
-                    No hay resultados para este filtro.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {filteredUsers.map((user, i) => (
+                  <tr key={user.id || i} className="hover:bg-slate-50 transition-colors group">
+                    <td className="px-8 py-5">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 font-bold">
+                          {user.name.charAt(0)}
+                        </div>
+                        <div>
+                          <p className="font-bold text-on-surface">{user.name}</p>
+                          <p className="text-xs text-slate-400">{user.email}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-8 py-5">
+                      <p className="text-sm text-slate-500 font-medium">{user.area}</p>
+                    </td>
+                    <td className="px-8 py-5">
+                      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                        user.role === 'super-admin' ? 'bg-purple-50 text-purple-600' :
+                        user.role === 'content-admin' ? 'bg-blue-50 text-blue-600' :
+                        'bg-slate-100 text-slate-500'
+                      }`}>
+                        {user.role}
+                      </span>
+                    </td>
+                    <td className="px-8 py-5">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${user.status === 'Activo' ? 'bg-green-500' : 'bg-slate-300'}`}></div>
+                        <span className="text-xs font-bold text-slate-500">{user.status}</span>
+                      </div>
+                    </td>
+                    <td className="px-8 py-5 text-right">
+                      <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                          onClick={() => handleOpenModal(user)}
+                          className="p-2 text-slate-400 hover:text-primary transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-sm">edit</span>
+                        </button>
+                        <button onClick={() => handleDeleteUser(user.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors">
+                          <span className="material-symbols-outlined text-sm">block</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {filteredUsers.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-8 py-10 text-center text-sm font-medium text-slate-400">
+                      No hay resultados para este filtro.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 
@@ -255,7 +267,7 @@ export default function UserManagementPage() {
                     type="text" 
                     value={formUser.name}
                     onChange={(event) => setFormUser((current) => ({ ...current, name: event.target.value }))}
-                    className="w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium" 
+                    className="w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium disabled:opacity-50" 
                     placeholder="Ej. Juan Pérez" 
                   />
                 </div>
@@ -265,7 +277,7 @@ export default function UserManagementPage() {
                     type="email" 
                     value={formUser.email}
                     onChange={(event) => setFormUser((current) => ({ ...current, email: event.target.value }))}
-                    className="w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium" 
+                    className="w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium disabled:opacity-50" 
                     placeholder="usuario@whirlpool.com" 
                   />
                 </div>
@@ -275,7 +287,7 @@ export default function UserManagementPage() {
                     <select 
                       value={formUser.area}
                       onChange={(event) => setFormUser((current) => ({ ...current, area: event.target.value }))}
-                      className="w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium"
+                      className="w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium disabled:opacity-50"
                     >
                       <option>Ingeniería</option>
                       <option>Marketing</option>
@@ -304,7 +316,7 @@ export default function UserManagementPage() {
                   <select 
                     value={formUser.status}
                     onChange={(event) => setFormUser((current) => ({ ...current, status: event.target.value as TeamUser['status'] }))}
-                    className="w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium"
+                    className="w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium disabled:opacity-50"
                   >
                     <option>Activo</option>
                     <option>Inactivo</option>

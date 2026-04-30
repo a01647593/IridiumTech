@@ -82,7 +82,6 @@ export default function CourseCatalogPage({ user }: { user?: any }) {
       {!loading && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
           {filteredCourses.map((course, i) => {
-            // Extraemos el progreso usando la estructura de tu servicio real
             const percentage = course.progreso?.porcentaje || 0;
 
             return (

@@ -153,20 +153,64 @@ export async function getLessonDetail(lessonId: string) {
 }
 
 export async function markLessonCompleted(userId: string, lessonId: string) {
-  const { error: progressError } = await supabase
-    .from('lesson_progress')
-    .upsert({ user_id: userId, lesson_id: lessonId }, { onConflict: 'user_id,lesson_id' });
-
-  if (progressError) throw progressError;
-
-  const { data: lessonData } = await supabase
+  // 1. Obtenemos a qué curso pertenece esta lección
+  const { data: lesson } = await supabase
     .from('lessons')
     .select('course_id')
     .eq('id', lessonId)
     .single();
 
-  if (lessonData?.course_id) {
-    await updateCourseCompletionStatus(userId, lessonData.course_id);
+  if (!lesson) return;
+  const courseId = lesson.course_id;
+
+  // 2. INSCRIPCIÓN AUTOMÁTICA (Corregido: sin campo status)
+  const { error: assignmentError } = await supabase
+    .from('course_assignments')
+    .upsert({ 
+      user_id: userId, 
+      course_id: courseId,
+      assigned_at: new Date().toISOString()
+    }, { onConflict: 'user_id,course_id' });
+
+  if (assignmentError) {
+    console.error("🚨 Error escribiendo en course_assignments:", assignmentError);
+  }
+
+  // 3. REGISTRAMOS QUE TERMINASTE ESTA LECCIÓN EN ESPECÍFICO
+  const { error: progressError } = await supabase
+    .from('lesson_progress')
+    .upsert({
+      user_id: userId,
+      lesson_id: lessonId,
+      completed_at: new Date().toISOString()
+    }, { onConflict: 'user_id,lesson_id' });
+
+  if (progressError) {
+    console.error("🚨 Error en lesson_progress:", progressError);
+  }
+
+  // 4. VERIFICAMOS SI YA TERMINASTE TODO EL CURSO
+  const [{ count: total }, { count: done }] = await Promise.all([
+    supabase.from('lessons').select('*', { count: 'exact', head: true }).eq('course_id', courseId),
+    supabase.from('lesson_progress')
+      .select('*, lessons!inner(course_id)', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('lessons.course_id', courseId)
+  ]);
+
+  // 5. SI TERMINASTE TODAS LAS LECCIONES, CERRAMOS EL CURSO (Corregido: solo usamos completed_at)
+  if (total !== null && total > 0 && total === done) {
+    const { error: completeError } = await supabase
+      .from('course_assignments')
+      .update({ 
+        completed_at: new Date().toISOString() 
+      })
+      .eq('user_id', userId)
+      .eq('course_id', courseId);
+      
+    if (completeError) {
+      console.error("🚨 Error cerrando el curso al 100%:", completeError);
+    }
   }
 }
 
@@ -359,5 +403,29 @@ export async function updateCourseCompletionStatus(userId: string, courseId: str
     if (error) {
       console.error('Error al actualizar el estado del curso:', error.message);
     }
+  }
+}
+
+export async function checkAndMarkCourseAsCompleted(userId: string, courseId: string) {
+  const { count: totalLessons } = await supabase
+    .from('lessons')
+    .select('*', { count: 'exact', head: true })
+    .eq('course_id', courseId);
+
+  const { count: completedCount } = await supabase
+    .from('lesson_progress')
+    .select('*, lessons!inner(course_id)', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('lessons.course_id', courseId);
+
+  if (totalLessons !== null && totalLessons > 0 && totalLessons === completedCount) {
+    await supabase
+      .from('course_assignments')
+      .update({ 
+        status: 'completed', 
+        completed_at: new Date().toISOString() 
+      })
+      .eq('user_id', userId)
+      .eq('course_id', courseId);
   }
 }

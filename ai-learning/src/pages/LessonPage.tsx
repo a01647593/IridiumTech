@@ -1,12 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { getLessonDetail } from '../lib/courseService';
-import {
-  isYoutubeUrl,
-  getYoutubeEmbedUrl,
-  isDirectVideoFile,
-} from '../lib/mediaHelpers';
+import { getLessonDetail, markLessonCompleted } from '../lib/courseService';
 
 type ModuleComment = {
   id: string;
@@ -17,7 +12,6 @@ type ModuleComment = {
 
 const getResourceIcon = (type: string) => {
   if (type === 'link') return 'link';
-  if (type === 'video') return 'smart_display';
   return 'description';
 };
 
@@ -34,7 +28,7 @@ export default function LessonPage({ user }: { user: any }) {
     async function loadLesson() {
       try {
         if (!lessonId) return;
-        const data = await getLessonDetail(lessonId);
+        const data = await getLessonDetail(lessonId, user?.id);
         console.log('LESSON DETAIL:', data);
         setLesson(data);
       } catch (err) {
@@ -44,8 +38,22 @@ export default function LessonPage({ user }: { user: any }) {
       }
     }
 
+    const initializeLesson = async () => {
+      if (user?.id && lessonId) {
+        try {
+          await markLessonCompleted(user.id, lessonId);
+          const data = await getLessonDetail(lessonId);
+          setLesson(data);
+        } catch (err) {
+          console.error("Error al iniciar lección:", err);
+        }
+      }
+    };
+  
+    initializeLesson();
+
     loadLesson();
-  }, [lessonId]);
+  }, [lessonId, user]);
 
   const instructionalContent = useMemo(
     () =>
@@ -94,7 +102,12 @@ export default function LessonPage({ user }: { user: any }) {
   };
 
   const handleContinueQuiz = async () => {
-    navigate(`/quiz/${lesson.id}`);
+    try {
+      await markLessonCompleted(lesson.id, user.id);
+      navigate(`/quiz/${lesson.id}`);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   if (loading) {
@@ -122,7 +135,7 @@ export default function LessonPage({ user }: { user: any }) {
             Lección
           </p>
           <p className="text-sm font-bold text-primary">
-            Módulo {lesson.order_index + 1}
+            Módulo {lesson.order_index}
           </p>
         </div>
       </div>
@@ -146,59 +159,32 @@ export default function LessonPage({ user }: { user: any }) {
             </div>
           ) : (
             instructionalContent.map((contentBlock: any) => {
-              const sourceUrl = contentBlock.external_url || contentBlock.file_url;
-
               if (contentBlock.type === 'video') {
-                if (!sourceUrl) return null;
-
-                if (isYoutubeUrl(sourceUrl)) {
-                  const embedUrl = getYoutubeEmbedUrl(sourceUrl);
-
-                  return (
-                    <div key={contentBlock.id} className="aspect-video rounded-2xl overflow-hidden">
-                      <iframe
-                        src={embedUrl || ''}
-                        className="w-full h-full"
-                        allowFullScreen
-                        title={contentBlock.title}
-                      />
-                    </div>
-                  );
-                }
-
-                if (isDirectVideoFile(sourceUrl)) {
-                  return (
-                    <div key={contentBlock.id} className="aspect-video rounded-2xl bg-slate-900 overflow-hidden">
-                      <video
-                        src={sourceUrl}
-                        controls
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  );
-                }
-
                 return (
-                  <a
+                  <div
                     key={contentBlock.id}
-                    href={sourceUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block p-6 rounded-2xl border border-slate-200 bg-slate-50"
+                    className="aspect-video rounded-2xl bg-slate-900 overflow-hidden"
                   >
-                    Abrir video externo
-                  </a>
+                    <video
+                      src={contentBlock.file_url}
+                      controls
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
                 );
               }
 
               if (contentBlock.type === 'slides') {
                 return (
-                  <div key={contentBlock.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                  <div
+                    key={contentBlock.id}
+                    className="bg-white rounded-2xl border border-slate-200 overflow-hidden"
+                  >
                     <div className="p-4 border-b border-slate-100 font-bold text-slate-700">
                       {contentBlock.title || 'Diapositivas'}
                     </div>
                     <iframe
-                      src={sourceUrl}
+                      src={contentBlock.file_url}
                       className="w-full h-[600px]"
                       title={contentBlock.title}
                     />
@@ -208,12 +194,15 @@ export default function LessonPage({ user }: { user: any }) {
 
               if (contentBlock.type === 'pdf') {
                 return (
-                  <div key={contentBlock.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                  <div
+                    key={contentBlock.id}
+                    className="bg-white rounded-2xl border border-slate-200 overflow-hidden"
+                  >
                     <div className="p-4 border-b border-slate-100 font-bold text-slate-700">
                       {contentBlock.title || 'Documento PDF'}
                     </div>
                     <iframe
-                      src={sourceUrl}
+                      src={contentBlock.file_url}
                       className="w-full h-[700px]"
                       title={contentBlock.title}
                     />
@@ -223,7 +212,10 @@ export default function LessonPage({ user }: { user: any }) {
 
               if (contentBlock.type === 'text') {
                 return (
-                  <div key={contentBlock.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
+                  <div
+                    key={contentBlock.id}
+                    className="rounded-2xl border border-slate-200 bg-slate-50 p-6"
+                  >
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">
                       Lectura
                     </p>

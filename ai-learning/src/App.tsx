@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Layout from './components/Layout';
 import { supabase } from './lib/supabaseClient';
+import { updateStreak } from './lib/userService';
 
 import AIAssistantPage from './pages/AIAssistantPage';
 import ContentManagementPage from './pages/ContentManagementPage';
@@ -55,6 +56,8 @@ function AppContent() {
         return;
       }
 
+      await updateStreak(data.user.id);
+
       const syncedUser = await getUserProfile(data.user.id);
       if (!syncedUser) {
         setUser(null);
@@ -81,6 +84,7 @@ function AppContent() {
       }
 
       void (async () => {
+        await updateStreak(session.user.id);
         const syncedUser = await getUserProfile(session.user.id);
       
         if (!syncedUser) {
@@ -182,7 +186,7 @@ function AppContent() {
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/dashboard" element={<DashboardPage user={user!} />} />
-              <Route path="/courses" element={<CourseCatalogPage />} />
+              <Route path="/courses" element={<CourseCatalogPage user={user!} />} />
               <Route path="/courses/:id" element={<CourseDetailPage user={user!} />} />
               <Route path="/lesson/:lessonId" element={<LessonPage user={user!} />} />
               <Route path="/quiz/:lessonId" element={<QuizPage user={user!} />} />
