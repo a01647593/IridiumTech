@@ -23,10 +23,40 @@ export default function ContentManagementPage() {
     title: '',
     duration: '45m',
     pdfUrl: '',
-    pdfFile: null as File | null,
     videoUrl: '',
     addQuiz: true,
   });
+  const [uploadingPdf, setUploadingPdf] = useState(false);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+
+  const uploadToStorage = async (file: File, type: 'pdf' | 'video') => {
+    const path = `${type}s/${Date.now()}-${file.name}`;
+    const setter = type === 'pdf' ? setUploadingPdf : setUploadingVideo;
+    const field = type === 'pdf' ? 'pdfUrl' : 'videoUrl';
+
+    setter(true);
+    try {
+      const { data, error } = await supabase.storage
+        .from('course-content')
+        .upload(path, file, { upsert: true, contentType: file.type });
+
+      if (error) {
+        console.error('[upload] error:', error);
+        throw error;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('course-content')
+        .getPublicUrl(data.path);
+
+      console.log('[upload] URL pública:', urlData.publicUrl);
+      setModuleDraft((curr) => ({ ...curr, [field]: urlData.publicUrl }));
+    } catch (err) {
+      alert(`Error subiendo archivo: ${err instanceof Error ? err.message : 'desconocido'}`);
+    } finally {
+      setter(false);
+    }
+  };
 
   useEffect(() => {
     loadCourses();
@@ -148,7 +178,6 @@ export default function ContentManagementPage() {
         title: '',
         duration: '45m',
         pdfUrl: '',
-        pdfFile: null,
         videoUrl: '',
         addQuiz: true,
       });
@@ -808,50 +837,56 @@ export default function ContentManagementPage() {
                       </label>
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                          Material PDF (Sube un archivo O pega una URL)
-                        </label>
-                        <div className="flex gap-2">
-                          {/* Opción 1: Subir Archivo */}
-                          <label className="flex items-center justify-center px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl cursor-pointer transition-colors text-sm font-bold">
-                            <span className="material-symbols-outlined mr-2 text-sm">upload_file</span>
-                            {moduleDraft.pdfFile ? 'Archivo seleccionado' : 'Subir Local'}
-                            <input
-                              type="file"
-                              accept="application/pdf"
-                              className="hidden"
-                              onChange={(event) => {
-                                const file = event.target.files?.[0] || null;
-                                setModuleDraft((current) => ({ ...current, pdfFile: file, pdfUrl: '' }));
-                              }}
-                            />
-                          </label>
-
-                          {/* Opción 2: Pegar URL */}
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">PDF (opcional)</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={moduleDraft.pdfUrl}
+                          onChange={(event) => setModuleDraft((current) => ({ ...current, pdfUrl: event.target.value }))}
+                          className="flex-1 h-12 px-4 bg-slate-50 rounded-xl text-sm"
+                          placeholder="https://...pdf o sube un archivo"
+                        />
+                        <label className={`flex items-center gap-1 px-3 h-12 rounded-xl border border-slate-200 text-xs font-bold cursor-pointer transition-all ${uploadingPdf ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50'}`}>
+                          {uploadingPdf ? (
+                            <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+                          ) : (
+                            <span className="material-symbols-outlined text-sm">upload_file</span>
+                          )}
                           <input
-                            type="text"
-                            value={moduleDraft.pdfUrl}
-                            disabled={!!moduleDraft.pdfFile}
-                            onChange={(event) => setModuleDraft((current) => ({ ...current, pdfUrl: event.target.value }))}
-                            className="flex-1 h-12 px-4 bg-slate-50 rounded-xl disabled:opacity-50"
-                            placeholder="https://... o usa el botón de subir"
+                            type="file"
+                            accept=".pdf"
+                            className="hidden"
+                            disabled={uploadingPdf}
+                            onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadToStorage(f, 'pdf'); }}
                           />
-                        </div>
-                        {moduleDraft.pdfFile && (
-                          <p className="text-xs text-primary font-bold mt-1">
-                            Archivo listo para subir: {moduleDraft.pdfFile.name}
-                          </p>
-                        )}
+                        </label>
                       </div>
+                    </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">URL Video (opcional)</label>
-                      <input
-                        type="text"
-                        value={moduleDraft.videoUrl}
-                        onChange={(event) => setModuleDraft((current) => ({ ...current, videoUrl: event.target.value }))}
-                        className="w-full h-12 px-4 bg-slate-50 rounded-xl"
-                        placeholder="https://...video"
-                      />
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Video (opcional)</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={moduleDraft.videoUrl}
+                          onChange={(event) => setModuleDraft((current) => ({ ...current, videoUrl: event.target.value }))}
+                          className="flex-1 h-12 px-4 bg-slate-50 rounded-xl text-sm"
+                          placeholder="https://...video o sube un archivo"
+                        />
+                        <label className={`flex items-center gap-1 px-3 h-12 rounded-xl border border-slate-200 text-xs font-bold cursor-pointer transition-all ${uploadingVideo ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50'}`}>
+                          {uploadingVideo ? (
+                            <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+                          ) : (
+                            <span className="material-symbols-outlined text-sm">upload_file</span>
+                          )}
+                          <input
+                            type="file"
+                            accept="video/*"
+                            className="hidden"
+                            disabled={uploadingVideo}
+                            onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadToStorage(f, 'video'); }}
+                          />
+                        </label>
+                      </div>
                     </div>
                   </div>
                   <button

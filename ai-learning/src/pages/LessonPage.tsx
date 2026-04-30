@@ -200,13 +200,14 @@ export default function LessonPage({ user }: { user: any }) {
           ) : (
             instructionalContent.map((contentBlock: any) => {
               if (contentBlock.type === 'video') {
+                const videoSrc = contentBlock.external_url || contentBlock.file_url;
                 return (
                   <div
                     key={contentBlock.id}
                     className="aspect-video rounded-2xl bg-slate-900 overflow-hidden"
                   >
                     <video
-                      src={contentBlock.file_url}
+                      src={videoSrc}
                       controls
                       className="w-full h-full object-cover"
                     />
@@ -215,6 +216,7 @@ export default function LessonPage({ user }: { user: any }) {
               }
 
               if (contentBlock.type === 'slides') {
+                const slidesSrc = contentBlock.external_url || contentBlock.file_url;
                 return (
                   <div
                     key={contentBlock.id}
@@ -224,7 +226,7 @@ export default function LessonPage({ user }: { user: any }) {
                       {contentBlock.title || 'Diapositivas'}
                     </div>
                     <iframe
-                      src={contentBlock.file_url}
+                      src={slidesSrc}
                       className="w-full h-[600px]"
                       title={contentBlock.title}
                     />
@@ -233,6 +235,7 @@ export default function LessonPage({ user }: { user: any }) {
               }
 
               if (contentBlock.type === 'pdf') {
+                const pdfSrc = contentBlock.external_url || contentBlock.file_url;
                 return (
                   <div
                     key={contentBlock.id}
@@ -242,7 +245,7 @@ export default function LessonPage({ user }: { user: any }) {
                       {contentBlock.title || 'Documento PDF'}
                     </div>
                     <iframe
-                      src={contentBlock.file_url}
+                      src={pdfSrc}
                       className="w-full h-[700px]"
                       title={contentBlock.title}
                     />
