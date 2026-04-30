@@ -100,6 +100,11 @@ export async function updateStreak(userId: string) {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 
+  await supabase
+    .from('users')
+    .update({ ultima_actividad: now.toISOString() })
+    .eq('id', userId);
+
   const { data: streakData, error } = await supabase
     .from('streaks')
     .select('*')
