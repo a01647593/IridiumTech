@@ -24,7 +24,7 @@ type ChatAck = {
 const geminiApiKey = process.env.GEMINI_API_KEY ?? process.env.VITE_GEMINI_API_KEY ?? '';
 const geminiModel = process.env.GEMINI_MODEL ?? 'gemini-3-flash-preview';
 const ai = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
-const whirlpoolFallbackMessage = 'Lo siento, como asistente de Whirlpool solo puedo ayudarte con temas relacionados a nuestros productos.';
+const whirlpoolFallbackMessage = 'Lo siento, solo puedo ayudarte con dudas sobre los cursos de capacitación a los que estás inscrito. Si tu pregunta no está relacionada con el contenido de los cursos, no puedo responderla.';
 const prohibitedBrandPattern = /\b(samsung|lg|daewoo)\b/i;
 
 function extractToken(socket: Socket, payload: ChatMessagePayload): string {
@@ -54,7 +54,7 @@ function formatTechnicalContext(contextText: string): string {
 
 function buildSystemInstruction(technicalContext?: string): string {
   const baseInstruction =
-    'Eres el asistente virtual de soporte para la Plataforma Adaptativa de Whirlpool. Puedes consultar información de cursos a los que el usuario está inscrito y procesar archivos adjuntos (por ejemplo, PDFs) mediante RAG o pasando el contenido directo al modelo. Tu función principal es ayudar a los usuarios a navegar por la plataforma, usar sus funciones y entender su interfaz y contenido de cursos al que tienen permiso de acceso.\n\nCuando uses contenido de cursos o PDFs, asegúrate de validar permisos del usuario y no exponer contenido de cursos privados para usuarios no autorizados.';
+    'Eres el Asistente Virtual de Capacitación y Formación de Whirlpool. Tu ÚNICA función es ayudar a los usuarios con dudas sobre el contenido de los cursos de capacitación a los que están inscritos. Puedes consultar material didáctico, responder preguntas sobre lecciones y procesar archivos PDF adjuntos mediante RAG.\n\nCUANDO RESPONDER:\n- SOLO responde dudas sobre cursos en los que el usuario está inscrito.\n- NUNCA des soporte técnico sobre electrodomésticos, reparaciones o productos Whirlpool.\n- NUNCA inventes contenido que no esté en los materiales de capacitación.\n- Si alguien pregunta sobre temas fuera del alcance de la formación, responde: \"Lo siento, solo puedo ayudarte con dudas sobre los cursos de capacitación a los que estás inscrito.\"';
 
   if (!technicalContext) {
     return baseInstruction;
@@ -114,18 +114,20 @@ async function generateGeminiReply(memoryMessages: ChatMessageRow[], userMessage
 
 function validateGeminiReply(reply: string): string {
   const normalizedReply = reply.trim();
+  
+  // Check for empty response
   if (!normalizedReply) {
     return whirlpoolFallbackMessage;
   }
 
+  // Reject if mentioning competitor brands (Samsung, LG, etc)
   if (prohibitedBrandPattern.test(normalizedReply)) {
     return whirlpoolFallbackMessage;
   }
 
-  if (!/\bwhirlpool\b/i.test(normalizedReply)) {
-    return whirlpoolFallbackMessage;
-  }
-
+  // For training system: don't force "Whirlpool" mention, 
+  // as course content may not mention brand explicitly
+  // The systemInstruction already guards against off-topic responses
   return normalizedReply;
 }
 
@@ -190,10 +192,10 @@ export function registerChatSocketHandlers(io: Server) {
           void addLog({ userId: authUser.id, level: 'warn', scope: 'chat', message: 'Course document search failed' });
         }
         
-        // Combine manual match + course documents + inline PDF text into technicalContext
-        const technicalMatch = await findBestWhirlpoolManualMatch(content);
-        const manualContext = technicalMatch?.content?.trim();
-        const technicalContext = [manualContext, courseDocumentsContext, pdfText].filter(Boolean).join('\n\n');
+        // Combine course documents + inline PDF text into technicalContext
+        // Note: findBestWhirlpoolManualMatch is intentionally NOT used for Training System
+        // (it searches technical manuals, not training content)
+        const technicalContext = [courseDocumentsContext, pdfText].filter(Boolean).join('\n\n');
         
         const reply = validateGeminiReply(await generateGeminiReply(memoryMessages, content, technicalContext || undefined));
         const persistedMessages = await insertChatMessages(authUser.id, [
