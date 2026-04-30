@@ -6,8 +6,7 @@ export async function getAdminDashboardStats() {
   try {
     const { count: usersCount } = await supabase
       .from('users')
-      .select('id', { count: 'exact', head: true })
-      .eq('empleado_verificado', true);
+      .select('id', { count: 'exact', head: true });
 
     const { count: coursesCount } = await supabase
       .from('courses')

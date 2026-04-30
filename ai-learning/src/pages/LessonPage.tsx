@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { getLessonDetail, markLessonCompleted } from '../lib/courseService';
+import { supabase } from '../lib/supabaseClient';
 
 type ModuleComment = {
   id: string;
@@ -71,39 +72,47 @@ export default function LessonPage({ user }: { user: any }) {
     [lesson]
   );
 
-  const commentsStorageKey = `module_comments:${user?.id || 'anon'}:${lessonId}`;
-
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(commentsStorageKey);
-      const parsed = raw ? JSON.parse(raw) : [];
-      setModuleComments(Array.isArray(parsed) ? parsed : []);
-    } catch {
-      setModuleComments([]);
-    }
-  }, [commentsStorageKey]);
+    if (!lessonId) return;
 
-  const handleAddComment = () => {
-    if (!commentInput.trim()) return;
+    supabase
+      .from('forum_posts')
+      .select('id, content, created_at, user_id, users(nombre, email)')
+      .eq('lesson_id', lessonId)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        setModuleComments(
+          (data ?? []).map((p: any) => ({
+            id: p.id,
+            text: p.content,
+            createdAt: p.created_at,
+            authorName: p.users?.nombre || p.users?.email || 'Usuario',
+          }))
+        );
+      });
+  }, [lessonId]);
 
-    const nextComments = [
-      {
-        id: `${Date.now()}`,
-        text: commentInput.trim(),
-        createdAt: new Date().toISOString(),
-        authorName: user?.name || user?.nombre || user?.email || 'Usuario',
-      },
-      ...moduleComments,
-    ];
+  const handleAddComment = async () => {
+    if (!commentInput.trim() || !user?.id || !lessonId) return;
 
-    setModuleComments(nextComments);
+    const { data, error } = await supabase
+      .from('forum_posts')
+      .insert({ user_id: user.id, lesson_id: lessonId, content: commentInput.trim() })
+      .select('id, content, created_at')
+      .single();
+
+    if (error || !data) return;
+
+    setModuleComments((prev) => [
+      { id: data.id, text: data.content, createdAt: data.created_at, authorName: user?.name || user?.email || 'Usuario' },
+      ...prev,
+    ]);
     setCommentInput('');
-    localStorage.setItem(commentsStorageKey, JSON.stringify(nextComments));
   };
 
   const handleContinueQuiz = async () => {
     try {
-      await markLessonCompleted(lesson.id, user.id);
+      await markLessonCompleted(user.id, lesson.id);
       navigate(`/quiz/${lesson.id}`);
     } catch (err) {
       console.error(err);
