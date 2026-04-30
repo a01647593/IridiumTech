@@ -5,6 +5,7 @@ import { supabase } from './lib/supabaseClient';
 import { updateStreak } from './lib/userService';
 
 import AIAssistantPage from './pages/AIAssistantPage';
+import CompleteProfilePage from './pages/CompleteProfilePage';
 import ContentManagementPage from './pages/ContentManagementPage';
 import CourseCatalogPage from './pages/CourseCatalogPage';
 import CourseDetailPage from './pages/CourseDetailPage';
@@ -132,6 +133,14 @@ function AppContent() {
     return <Navigate to="/login" replace />;
   }
 
+  if (user && user.needsOnboarding && location.pathname !== '/complete-profile') {
+    return <Navigate to="/complete-profile" replace />;
+  }
+
+  if (user && !user.needsOnboarding && location.pathname === '/complete-profile') {
+    return <Navigate to={defaultAuthenticatedRoute} replace />;
+  }
+
   if (user && location.pathname === '/login') {
     return <Navigate to={defaultAuthenticatedRoute} replace />;
   }
@@ -178,6 +187,7 @@ function AppContent() {
     <Routes>
       <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/complete-profile" element={<CompleteProfilePage onComplete={handleLogin} />} />
 
       <Route
         path="/*"
