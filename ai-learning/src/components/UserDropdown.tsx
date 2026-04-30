@@ -66,15 +66,6 @@ export default function UserDropdown({ user, onLogout, isSidebar = false }: User
               <span className="material-symbols-outlined text-lg text-slate-400">person</span>
               <span className="font-bold">Ver Perfil</span>
             </Link>
-            
-            <Link 
-              to="/profile" 
-              onClick={() => setIsOpen(false)}
-              className="flex items-center gap-3 px-4 py-2 text-sm text-on-surface hover:bg-slate-50 transition-colors"
-            >
-              <span className="material-symbols-outlined text-lg text-slate-400">photo_camera</span>
-              <span className="font-bold">Cambiar Foto</span>
-            </Link>
 
             <div className="h-px bg-slate-50 my-1" />
             

@@ -1,218 +1,143 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
+import { getQuizByLesson, createAttempt, finishAttempt, processUserRewards } from '../lib/quizService';
+import { getCourseDetail } from '../lib/courseService';
+import { supabase } from '../lib/supabaseClient';
 
 interface Option {
-  id: number;
-  preguntaId: number;
+  id: string;
   texto: string;
   esCorrecta: boolean;
-  explicacion: string;
 }
 
 interface Question {
-  id: number;
+  id: string;
   texto: string;
   orden: number;
   opciones: Option[];
 }
 
 interface Leccion {
-  id: number;
+  id: string;
   titulo: string;
-  orden: number;
-  fechaLimite: string;
-  cursoId: number;
-  cursoTitulo: string;
 }
 
-// Mock Quiz - Fallback mientras se crean otros
-const MOCK_QUIZ: { leccion: Leccion; preguntas: Question[] } = {
-  leccion: {
-    id: 1,
-    titulo: 'Quiz de Prueba - Whirlpool',
-    orden: 1,
-    fechaLimite: '2024-12-31',
-    cursoId: 1,
-    cursoTitulo: 'Curso Demo'
-  },
-  preguntas: [
-    {
-      id: 1,
-      texto: '¿En qué año fue fundada Whirlpool Corporation?',
-      orden: 1,
-      opciones: [
-        { id: 1, preguntaId: 1, texto: '1911', esCorrecta: true, explicacion: 'Whirlpool fue fundada en 1911 como The Upton Machine Company' },
-        { id: 2, preguntaId: 1, texto: '1920', esCorrecta: false, explicacion: 'Whirlpool se fundó antes de 1920' },
-        { id: 3, preguntaId: 1, texto: '1925', esCorrecta: false, explicacion: 'Whirlpool se fundó antes de 1925' },
-        { id: 4, preguntaId: 1, texto: '1905', esCorrecta: false, explicacion: 'Whirlpool se fundó después de 1905' },
-        { id: 5, preguntaId: 1, texto: '1930', esCorrecta: false, explicacion: 'Whirlpool se fundó antes de 1930' }
-      ]
-    },
-    {
-      id: 2,
-      texto: '¿Cuál es el principal enfoque de innovación de Whirlpool en electrodomésticos inteligentes?',
-      orden: 2,
-      opciones: [
-        { id: 6, preguntaId: 2, texto: 'Conectividad IoT y control remoto', esCorrecta: true, explicacion: 'Whirlpool se enfoca en electrodomésticos conectados con control remoto e inteligencia artificial' },
-        { id: 7, preguntaId: 2, texto: 'Solo reducir precios', esCorrecta: false, explicacion: 'Whirlpool enfatiza innovación tecnológica además de precios competitivos' },
-        { id: 8, preguntaId: 2, texto: 'Eliminar todas las características', esCorrecta: false, explicacion: 'Whirlpool agrega características, no las elimina' },
-        { id: 9, preguntaId: 2, texto: 'Cambiar colores únicamente', esCorrecta: false, explicacion: 'Whirlpool innova en tecnología, no solo en estética' },
-        { id: 10, preguntaId: 2, texto: 'Aumentar tamaño de productos', esCorrecta: false, explicacion: 'Whirlpool optimiza tamaño y espacio eficientemente' }
-      ]
-    },
-    {
-      id: 3,
-      texto: '¿Qué tecnología de IA utiliza Whirlpool en su plataforma GIT Labs para el aprendizaje?',
-      orden: 3,
-      opciones: [
-        { id: 11, preguntaId: 3, texto: 'Google Gemini y LLMs generativos', esCorrecta: true, explicacion: 'Whirlpool utiliza Google Gemini y otros modelos de lenguaje en su plataforma GIT Labs' },
-        { id: 12, preguntaId: 3, texto: 'Solo análisis de datos básico', esCorrecta: false, explicacion: 'GIT Labs ofrece mucho más que análisis básico' },
-        { id: 13, preguntaId: 3, texto: 'No utiliza IA', esCorrecta: false, explicacion: 'GIT Labs está completamente basada en tecnología de IA' },
-        { id: 14, preguntaId: 3, texto: 'Solo reconocimiento de imágenes', esCorrecta: false, explicacion: 'GIT Labs usa múltiples tecnologías de IA, va más allá de imágenes' },
-        { id: 15, preguntaId: 3, texto: 'Algoritmos de los años 2000', esCorrecta: false, explicacion: 'GIT Labs utiliza tecnología de IA moderna y generativa' }
-      ]
-    }
-  ]
-};
+interface RespuestaData {
+  preguntaId: string;
+  opcionId: string;
+  esCorrecta: boolean;
+}
 
-export default function QuizPage() {
+export default function QuizPage({ user }: { user: any }) {
   const navigate = useNavigate();
-  const location = useLocation();
-  const queryParams = new URLSearchParams(location.search);
-  const leccionId = queryParams.get('id');
-  
+  const { lessonId } = useParams<{ lessonId: string }>();
+
+  const [loading, setLoading] = useState(true);
+  const [resolvedCourseId, setResolvedCourseId] = useState<string | null>(null);
+  const [leccion, setLeccion] = useState<Leccion | null>(null);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [attemptId, setAttemptId] = useState<string | null>(null);
+
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
-  const [score, setScore] = useState(0);
+  const [respuestas, setRespuestas] = useState<RespuestaData[]>([]);
+
   const [isFinished, setIsFinished] = useState(false);
+  const [finalPercentage, setFinalPercentage] = useState(0);
   const [xpEarned, setXpEarned] = useState(0);
   const [unlockedBadges, setUnlockedBadges] = useState<string[]>([]);
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [leccion, setLeccion] = useState<Leccion | null>(null);
-  const [sesionId, setSesionId] = useState<number | null>(null);
-  const [respuestas, setRespuestas] = useState<any[]>([]);
-  const [finalPercentage, setFinalPercentage] = useState(0);
+  const [nextLessonId, setNextLessonId] = useState<string | null>(null);
 
   useEffect(() => {
-    const initializeQuiz = async () => {
+    if (!lessonId) return;
+
+    async function initializeQuiz() {
       try {
-        const userId = localStorage.getItem('userId');
-        
-        // Si no hay leccionId, usar mock quiz
-        if (!leccionId) {
-          setLeccion(MOCK_QUIZ.leccion);
-          setQuestions(MOCK_QUIZ.preguntas);
-          setSesionId(null); // Sin sesión en mock
-          setLoading(false);
-          return;
-        }
+        const data = await getQuizByLesson(lessonId!);
+        if (!data) throw new Error('No existe quiz para esta lección');
 
-        // Intentar cargar desde la API
-        if (!userId) {
-          throw new Error('Usuario no autenticado');
-        }
-
-        const res = await fetch(`/api/quiz/iniciar?leccionId=${leccionId}&userId=${userId}`);
-        if (!res.ok) {
-          throw new Error('Error al cargar la lección');
-        }
-        const data = await res.json();
         setLeccion(data.leccion);
-        setQuestions(data.preguntas || []);
-        setSesionId(data.sesionId);
-        setLoading(false);
+        setQuestions(data.preguntas);
+
+        const attempt = await createAttempt(user.id, lessonId!, data.quizId);
+        setAttemptId(attempt.id);
+
+        const { data: lessonRow } = await supabase
+          .from('lessons')
+          .select('course_id')
+          .eq('id', lessonId)
+          .maybeSingle();
+
+        const resolvedId = lessonRow?.course_id ?? null;
+        setResolvedCourseId(resolvedId);
+
+        if (resolvedId) {
+          const course = await getCourseDetail(resolvedId, user.id);
+          const lessons: any[] = course?.lessons ?? [];
+          const currentIndex = lessons.findIndex((l) => String(l.id) === String(lessonId));
+          if (currentIndex !== -1 && currentIndex < lessons.length - 1) {
+            setNextLessonId(String(lessons[currentIndex + 1].id));
+          }
+        }
       } catch (err) {
-        // En caso de error, usar mock quiz como fallback
-        console.warn('Usando mock quiz como fallback:', err);
-        setLeccion(MOCK_QUIZ.leccion);
-        setQuestions(MOCK_QUIZ.preguntas);
-        setSesionId(null);
+        console.error('Error cargando quiz:', err);
+      } finally {
         setLoading(false);
       }
-    };
+    }
 
     initializeQuiz();
-  }, [leccionId]);
+  }, [lessonId, user]);
 
   const currentQuestion = questions[currentQuestionIndex];
-  const progress = questions.length > 0 ? ((currentQuestionIndex + 1) / questions.length) * 100 : 0;
+  const progress = questions.length > 0
+    ? ((currentQuestionIndex + 1) / questions.length) * 100
+    : 0;
 
   const handleNext = async () => {
     if (selectedOption === null || !currentQuestion) return;
 
     const selectedOp = currentQuestion.opciones[selectedOption];
-    const respuestaData = {
+    const respuestaData: RespuestaData = {
       preguntaId: currentQuestion.id,
       opcionId: selectedOp.id,
-      esCorrecta: selectedOp.esCorrecta
+      esCorrecta: selectedOp.esCorrecta,
     };
 
-    if (selectedOp.esCorrecta) {
-      setScore(prev => prev + 1);
-    }
-
-    setRespuestas([...respuestas, respuestaData]);
+    const updatedAnswers = [...respuestas, respuestaData];
+    setRespuestas(updatedAnswers);
 
     if (currentQuestionIndex < questions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1);
+      setCurrentQuestionIndex((prev) => prev + 1);
       setSelectedOption(null);
     } else {
-      await finalizeQuiz([...respuestas, respuestaData]);
+      await finalizeQuiz(updatedAnswers);
     }
   };
 
-  const finalizeQuiz = async (allRespuestas: any[]) => {
+  const finalizeQuiz = async (allAnswers: RespuestaData[]) => {
     try {
-      // Calcular porcentaje
-      const correctAnswers = allRespuestas.filter((r: any) => r.esCorrecta).length;
-      const calculatedPercentage = (correctAnswers / questions.length) * 100;
-      
+      const result = await finishAttempt(attemptId, allAnswers);
+      const percentage = result.porcentaje;
+
       let xp = 0;
-      const newBadges: string[] = [];
+      const badges: string[] = [];
 
-      if (calculatedPercentage === 100) {
-        xp += 100;
-        newBadges.push('Perfeccionista');
-      } else if (calculatedPercentage >= 85) {
-        xp += 60;
-        newBadges.push('Excelencia');
-      } else if (calculatedPercentage >= 70) {
-        xp += 40;
+      if (percentage === 100) { xp = 100; badges.push('Perfeccionista'); }
+      else if (percentage >= 85) { xp = 60; badges.push('Excelencia'); }
+      else if (percentage >= 70) { xp = 40; }
+
+      if (xp > 0 || badges.length > 0) {
+        await processUserRewards(user.id, resolvedCourseId, xp, badges);
       }
 
-      // Si hay sesionId, guardar en API
-      if (sesionId) {
-        try {
-          const saveRes = await fetch('/api/quiz/responder', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sesionId,
-              respuestas: allRespuestas.map(r => ({
-                preguntaId: r.preguntaId,
-                opcionId: r.opcionId
-              }))
-            })
-          });
-
-          if (!saveRes.ok) {
-            console.warn('No se pudieron guardar respuestas en la API');
-          }
-        } catch (err) {
-          console.warn('Error guardando en API:', err);
-        }
-      }
-
+      setFinalPercentage(percentage);
       setXpEarned(xp);
-      setUnlockedBadges(newBadges);
-      setFinalPercentage(Math.round(calculatedPercentage));
+      setUnlockedBadges(badges);
       setIsFinished(true);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Error al finalizar';
-      console.error(errorMessage);
+      console.error('Error finalizando quiz:', err);
     }
   };
 
@@ -220,23 +145,26 @@ export default function QuizPage() {
     return (
       <div className="max-w-3xl mx-auto p-6 flex items-center justify-center h-screen">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-slate-600">Cargando quiz...</p>
+          <span className="material-symbols-outlined text-5xl text-primary animate-spin block mx-auto mb-4">
+            progress_activity
+          </span>
+          <p className="text-slate-500 font-medium">Cargando quiz...</p>
         </div>
       </div>
     );
   }
 
-  if (error) {
+  if (!leccion || questions.length === 0) {
     return (
-      <div className="max-w-3xl mx-auto p-6 text-center">
-        <div className="bg-red-50 border border-red-200 rounded-2xl p-6">
-          <p className="text-red-600 font-bold mb-4">{error}</p>
-          <button 
-            onClick={() => navigate('/dashboard')} 
-            className="bg-primary text-white px-6 py-2 rounded-lg hover:scale-105 transition-all"
+      <div className="max-w-3xl mx-auto p-10 text-center">
+        <div className="bg-red-50 border border-red-100 rounded-3xl p-8">
+          <span className="material-symbols-outlined text-4xl text-red-400 block mx-auto mb-4">quiz</span>
+          <p className="text-red-500 font-bold mb-4">No hay quiz disponible para esta lección.</p>
+          <button
+            onClick={() => navigate(resolvedCourseId ? `/courses/${resolvedCourseId}` : '/courses')}
+            className="px-6 py-3 bg-primary text-white rounded-2xl font-bold"
           >
-            Volver al Dashboard
+            Volver al curso
           </button>
         </div>
       </div>
@@ -246,44 +174,42 @@ export default function QuizPage() {
   if (isFinished) {
     return (
       <div className="max-w-3xl mx-auto p-6 lg:p-12 text-center">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.9 }}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="bg-white rounded-3xl p-10 shadow-2xl border border-slate-100"
+          className="bg-white rounded-[2.5rem] p-10 shadow-2xl border border-slate-100"
         >
-          <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
+          <div className="w-24 h-24 mx-auto rounded-full bg-primary/10 flex items-center justify-center mb-6">
             <span className="material-symbols-outlined text-5xl text-primary">
               {finalPercentage >= 70 ? 'workspace_premium' : 'sentiment_dissatisfied'}
             </span>
           </div>
+
           <h2 className="text-3xl font-black text-on-surface mb-2">
-            {finalPercentage >= 70 ? '¡Felicidades!' : 'Sigue intentándolo'}
+            {finalPercentage >= 70 ? '¡Quiz completado!' : 'Necesitas reforzar el módulo'}
           </h2>
           <p className="text-slate-500 mb-8">
-            Has completado: <span className="font-bold text-primary">{leccion?.titulo}</span>
+            Resultado en <span className="font-bold text-primary">{leccion.titulo}</span>
           </p>
-          
+
           <div className="grid grid-cols-2 gap-4 mb-8">
-            <div className="bg-slate-50 p-6 rounded-2xl">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Puntaje</p>
-              <p className="text-3xl font-black text-primary">{Math.round(finalPercentage)}%</p>
+            <div className="bg-slate-50 rounded-2xl p-6">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Puntaje</p>
+              <p className="text-3xl font-black text-primary">{finalPercentage}%</p>
             </div>
-            <div className="bg-slate-50 p-6 rounded-2xl">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">XP Ganada</p>
+            <div className="bg-slate-50 rounded-2xl p-6">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">XP Ganada</p>
               <p className="text-3xl font-black text-accent-blue">+{xpEarned}</p>
             </div>
           </div>
 
           {unlockedBadges.length > 0 && (
-            <div className="mb-8 p-4 bg-amber-50 rounded-2xl border border-amber-100">
-              <p className="text-amber-800 font-bold text-sm flex items-center justify-center gap-2">
-                <span className="material-symbols-outlined text-amber-500">military_tech</span>
-                ¡Nuevo Logro Desbloqueado!
-              </p>
-              <div className="flex justify-center gap-2 mt-2">
-                {unlockedBadges.map(b => (
-                  <span key={b} className="bg-amber-500 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest">
-                    {b}
+            <div className="mb-8 bg-amber-50 border border-amber-100 rounded-2xl p-4">
+              <p className="text-sm font-bold text-amber-700 mb-2">Logro desbloqueado</p>
+              <div className="flex justify-center gap-2 flex-wrap">
+                {unlockedBadges.map((badge) => (
+                  <span key={badge} className="px-3 py-1 rounded-full bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest">
+                    {badge}
                   </span>
                 ))}
               </div>
@@ -291,15 +217,23 @@ export default function QuizPage() {
           )}
 
           <div className="flex flex-col sm:flex-row gap-4">
-            <button 
-              onClick={() => navigate('/dashboard')}
-              className="flex-1 bg-primary text-white py-4 rounded-2xl font-bold shadow-lg hover:scale-105 transition-all"
+            {nextLessonId && (
+              <button
+                onClick={() => navigate(`/lesson/${nextLessonId}`)}
+                className="flex-1 py-4 rounded-2xl bg-accent-blue text-white font-bold"
+              >
+                Módulo Siguiente
+              </button>
+            )}
+            <button
+              onClick={() => navigate(resolvedCourseId ? `/courses/${resolvedCourseId}` : '/courses')}
+              className="flex-1 py-4 rounded-2xl bg-primary text-white font-bold"
             >
-              Volver al Dashboard
+              Volver al Curso
             </button>
-            <button 
+            <button
               onClick={() => window.location.reload()}
-              className="flex-1 bg-slate-100 text-slate-600 py-4 rounded-2xl font-bold hover:bg-slate-200 transition-all"
+              className="flex-1 py-4 rounded-2xl bg-slate-100 text-slate-600 font-bold"
             >
               Reintentar
             </button>
@@ -311,96 +245,104 @@ export default function QuizPage() {
 
   return (
     <div className="max-w-5xl mx-auto p-4 sm:p-6 lg:p-12">
-      <div className="flex flex-col sm:flex-row justify-between mb-6 sm:mb-10 gap-4">
+      <div className="flex flex-col sm:flex-row justify-between mb-10 gap-4">
         <div>
-          <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-on-surface leading-tight">
-            {leccion?.titulo || 'Quiz'}
+          <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-on-surface">
+            {leccion.titulo}
           </h1>
-          <p className="text-slate-400 mt-2 font-bold uppercase tracking-widest text-[10px]">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-2">
             Pregunta {currentQuestionIndex + 1} de {questions.length}
           </p>
         </div>
-        <div className="w-full sm:w-48 h-2 bg-slate-100 rounded-full overflow-hidden self-start sm:self-end">
-          <motion.div 
+        <div className="w-full sm:w-48 h-2 rounded-full bg-slate-100 overflow-hidden self-start sm:self-end">
+          <motion.div
             initial={{ width: 0 }}
             animate={{ width: `${progress}%` }}
-            className="h-full bg-accent-blue rounded-full"
-          ></motion.div>
+            className="h-full bg-accent-blue"
+          />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 items-start">
-        <div className="lg:col-span-8 space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="lg:col-span-8">
           <AnimatePresence mode="wait">
-            {currentQuestion && (
-            <motion.div 
+            <motion.div
               key={currentQuestionIndex}
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-100 shadow-xl"
+              className="bg-white rounded-[2.5rem] p-8 sm:p-10 border border-slate-100 shadow-xl"
             >
-              <p className="text-lg sm:text-xl font-semibold text-on-surface mb-6 sm:mb-8">
+              <p className="text-xl font-bold text-on-surface mb-8">
                 {currentQuestion.texto}
               </p>
+
               <div className="space-y-4">
-                {currentQuestion.opciones?.map((option: Option, idx: number) => (
-                  <div 
+                {currentQuestion.opciones.map((option, idx) => (
+                  <div
                     key={option.id}
                     onClick={() => setSelectedOption(idx)}
-                    className={`p-4 sm:p-5 border-2 rounded-2xl flex items-center gap-4 cursor-pointer transition-all ${
-                      selectedOption === idx 
-                      ? 'bg-blue-50 border-accent-blue shadow-md' 
-                      : 'bg-slate-50 border-transparent hover:border-slate-200'
+                    className={`p-5 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-4 ${
+                      selectedOption === idx
+                        ? 'border-accent-blue bg-blue-50'
+                        : 'border-slate-100 bg-slate-50 hover:border-slate-200'
                     }`}
                   >
-                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
                       selectedOption === idx ? 'border-accent-blue' : 'border-slate-300'
                     }`}>
-                      {selectedOption === idx && <div className="w-3 h-3 rounded-full bg-accent-blue"></div>}
+                      {selectedOption === idx && (
+                        <div className="w-3 h-3 rounded-full bg-accent-blue" />
+                      )}
                     </div>
-                    <span className={`text-sm sm:text-md ${selectedOption === idx ? 'font-bold text-primary' : 'font-medium text-slate-600'}`}>
+                    <span className={`font-medium ${
+                      selectedOption === idx ? 'text-primary font-bold' : 'text-slate-600'
+                    }`}>
                       {option.texto}
                     </span>
                   </div>
                 ))}
               </div>
-              <div className="mt-8 sm:mt-12 flex justify-end">
-                <button 
+
+              <div className="mt-10 flex justify-end">
+                <button
                   onClick={handleNext}
                   disabled={selectedOption === null}
-                  className={`w-full sm:w-auto px-10 py-4 rounded-2xl font-bold text-sm shadow-lg flex items-center justify-center gap-2 transition-all ${
-                    selectedOption === null 
-                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
-                    : 'bg-primary text-white hover:scale-105'
+                  className={`px-10 py-4 rounded-2xl font-bold flex items-center gap-2 transition-all ${
+                    selectedOption === null
+                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                      : 'bg-primary text-white hover:scale-105'
                   }`}
                 >
-                  {currentQuestionIndex === questions.length - 1 ? 'Finalizar' : 'Siguiente'} 
+                  {currentQuestionIndex === questions.length - 1 ? 'Finalizar' : 'Siguiente'}
                   <span className="material-symbols-outlined text-sm">arrow_forward</span>
                 </button>
               </div>
             </motion.div>
-            )}
           </AnimatePresence>
         </div>
 
-        <div className="lg:col-span-4 space-y-6">
-          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-            <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4">Recompensas del Quiz</h4>
-            <ul className="space-y-4">
-              <li className="flex items-center gap-3 text-sm font-medium text-slate-600">
-                <span className="w-8 h-8 bg-green-50 text-green-600 rounded-lg flex items-center justify-center font-bold">100</span>
-                XP por 100% de aciertos
+        <div className="lg:col-span-4">
+          <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-6">
+            <h4 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-4">
+              Recompensas
+            </h4>
+            <ul className="space-y-3 text-sm font-medium text-slate-600">
+              <li className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-amber-500 text-base">emoji_events</span>
+                100 XP por 100% de aciertos
               </li>
-              <li className="flex items-center gap-3 text-sm font-medium text-slate-600">
-                <span className="w-8 h-8 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center font-bold">60</span>
-                XP por más de 85%
+              <li className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-blue-500 text-base">star</span>
+                60 XP por más de 85%
               </li>
-              <li className="flex items-center gap-3 text-sm font-medium text-slate-600">
-                <span className="w-8 h-8 bg-amber-50 text-amber-600 rounded-lg flex items-center justify-center font-bold">
-                  <span className="material-symbols-outlined text-sm">military_tech</span>
-                </span>
-                Insignia por Perfección
+              <li className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-green-500 text-base">check_circle</span>
+                40 XP por más de 70%
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-purple-500 text-base">workspace_premium</span>
+                Insignia por perfección
               </li>
             </ul>
           </div>

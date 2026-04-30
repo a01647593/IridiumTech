@@ -1,11 +1,28 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { MOCK_METRICS } from '../constants';
+import { getAdminDashboardStats } from '../lib/adminService';
 
 export default function AdminDashboardPage() {
   const navigate = useNavigate();
   
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
   const COLORS = ['#003da5', '#ffb81c', '#00a9e0', '#4a4a4a', '#8a8a8a'];
+
+  useEffect(() => {
+    async function loadStats() {
+      const data = await getAdminDashboardStats();
+      setStats(data);
+      setLoading(false);
+    }
+    loadStats();
+  }, []);
+
+  if (loading) {
+    return <div className="p-10 text-center text-slate-500 font-semibold">Cargando métricas globales...</div>;
+  }
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-7xl mx-auto space-y-6 sm:space-y-8">
@@ -16,32 +33,33 @@ export default function AdminDashboardPage() {
         </div>
         <div className="flex gap-3 w-full sm:w-auto">
           <button onClick={() => navigate('/admin/users')} className="flex-1 sm:flex-none px-6 py-3 bg-white text-primary border border-slate-200 rounded-xl font-bold shadow-sm hover:bg-slate-50 transition-all">Gestionar Usuarios</button>
-          <button onClick={() => navigate('/admin/create-course')} className="flex-1 sm:flex-none px-6 py-3 bg-primary text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all">Nuevo Curso</button>
+          <button onClick={() => navigate('/admin/content')} className="flex-1 sm:flex-none px-6 py-3 bg-primary text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all">Gestión de Contenido</button>
         </div>
       </header>
 
+      {/* MÉTRICAS SUPERIORES ACTUALIZADAS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Usuarios Activos</p>
-          <h3 className="text-3xl font-black text-primary">5,240</h3>
+          <h3 className="text-3xl font-black text-primary">{stats?.usersCount || 0}</h3>
           <p className="text-xs text-green-600 font-bold mt-2 flex items-center gap-1">
-            <span className="material-symbols-outlined text-sm">trending_up</span> +12% este mes
+            <span className="material-symbols-outlined text-sm">check_circle</span> Colaboradores
           </p>
         </div>
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Cursos Publicados</p>
-          <h3 className="text-3xl font-black text-primary">14</h3>
-          <p className="text-xs text-slate-400 font-bold mt-2">Meta anual: 20</p>
+          <h3 className="text-3xl font-black text-primary">{stats?.coursesCount || 0}</h3>
+          <p className="text-xs text-slate-400 font-bold mt-2">Disponibles en catálogo</p>
         </div>
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Impacto Estimado</p>
-          <h3 className="text-3xl font-black text-primary">$1.2M</h3>
-          <p className="text-xs text-accent-blue font-bold mt-2">Ahorro en horas hombre</p>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Impacto (Lecciones)</p>
+          <h3 className="text-3xl font-black text-primary">{stats?.completedLessonsCount || 0}</h3>
+          <p className="text-xs text-accent-blue font-bold mt-2">Módulos completados</p>
         </div>
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Tasa de Abandono</p>
-          <h3 className="text-3xl font-black text-on-surface">8.4%</h3>
-          <p className="text-xs text-amber-600 font-bold mt-2">-2% vs mes anterior</p>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Cursos en Progreso</p>
+          <h3 className="text-3xl font-black text-on-surface">{stats?.assignmentsCount || 0}</h3>
+          <p className="text-xs text-amber-600 font-bold mt-2">Asignaciones activas</p>
         </div>
       </div>
 
@@ -52,19 +70,23 @@ export default function AdminDashboardPage() {
             <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Tiempo Real</span>
           </div>
           <div className="h-80 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={MOCK_METRICS}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="area" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10, fontWeight: 700}} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10, fontWeight: 700}} />
-                <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                  {MOCK_METRICS.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            {stats?.chartData && stats.chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={stats.chartData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="area" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10, fontWeight: 700}} />
+                  <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10, fontWeight: 700}} />
+                  <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                  <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                    {stats.chartData.map((_entry: any, index: number) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-slate-400">No hay datos suficientes</div>
+            )}
           </div>
         </div>
 
@@ -84,7 +106,7 @@ export default function AdminDashboardPage() {
                   <span className="material-symbols-outlined text-primary">edit_note</span>
                   <span className="text-sm font-bold">Content Admins</span>
                 </div>
-                <span className="text-sm font-black text-primary">3</span>
+                <span className="text-sm font-black text-primary">{stats?.contentAdminsCount || 0}</span>
               </div>
               <button className="w-full py-3 bg-slate-100 text-slate-500 text-xs font-bold rounded-xl hover:bg-slate-200 transition-all">Ver Logs de Auditoría</button>
             </div>
@@ -95,7 +117,7 @@ export default function AdminDashboardPage() {
               <span className="material-symbols-outlined text-8xl">auto_awesome</span>
             </div>
             <h4 className="text-lg font-bold mb-2">IA Insights</h4>
-            <p className="text-sm text-white/80 leading-relaxed mb-6">El área de Ingeniería ha incrementado su eficiencia en un 22% tras completar el curso de Arquitecturas Neurales.</p>
+            <p className="text-sm text-white/80 leading-relaxed mb-6">El tablero se actualiza en tiempo real basado en la participación de los {stats?.usersCount || 0} usuarios en la plataforma.</p>
             <button className="w-full py-3 bg-white/10 backdrop-blur-md border border-white/20 text-white text-xs font-bold rounded-xl hover:bg-white/20 transition-all">Generar Reporte Completo</button>
           </div>
         </div>

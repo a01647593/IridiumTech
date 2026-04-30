@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-// import { GoogleGenAI } from "@google/genai";
-import whirlpoolLogo from '../assets/logowhirlpool.png';
+import { GoogleGenAI } from '@google/genai';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import ThinkingIndicator from '../components/ThinkingIndicator';
 
 interface Message {
   id: string;
@@ -9,7 +11,52 @@ interface Message {
   timestamp: Date;
 }
 
-// const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const sanitizeEnvValue = (value: unknown) => {
+  if (typeof value !== 'string') return '';
+  return value.trim().replace(/^['"]|['"]$/g, '');
+};
+
+const geminiApiKey =
+  sanitizeEnvValue((import.meta as { env?: Record<string, string> }).env?.VITE_GEMINI_API_KEY) ||
+  '';
+const geminiModel =
+  sanitizeEnvValue((import.meta as { env?: Record<string, string> }).env?.VITE_GEMINI_MODEL) ||
+  'gemini-2.5-flash';
+
+const geminiModelFallbacks = [geminiModel, 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+
+const ai = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
+
+async function generateAssistantReply(history: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>) {
+  if (!ai) {
+    throw new Error('Falta configurar la API key de Gemini.');
+  }
+
+  const uniqueModels = Array.from(new Set(geminiModelFallbacks.filter(Boolean)));
+  let lastError: unknown = null;
+
+  for (const model of uniqueModels) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: history,
+        config: {
+          systemInstruction: 'Eres el asistente virtual de soporte para la nueva Plataforma Adaptativa de Whirlpool. Tu ÚNICA función es ayudar a los usuarios a navegar por esta plataforma, usar sus funciones y entender su interfaz. Tu ÚNICA fuente de verdad es el texto proporcionado bajo la etiqueta [CONTEXTO DE LA PLATAFORMA]. Si el usuario pregunta algo que no está en ese contexto (incluso si es sobre electrodomésticos Whirlpool, reparaciones, o temas externos), tienes estrictamente prohibido inventar o adivinar. Responde siempre: Lo siento, solo puedo ayudarte con dudas sobre el uso y las funciones de esta plataforma adaptativa.'
+        }
+      });
+
+      return response.text?.trim() || 'Lo siento, no pude procesar tu solicitud en este momento.';
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      if (!/503|UNAVAILABLE|high demand/i.test(message)) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('No se pudo contactar con Gemini en este momento.');
+}
 
 export default function AIAssistantPage() {
   const [messages, setMessages] = useState<Message[]>([
@@ -35,6 +82,17 @@ export default function AIAssistantPage() {
   const handleSend = async () => {
     if (!input.trim() || isTyping) return;
 
+    if (!ai) {
+      const missingKeyMessage: Message = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: 'Falta configurar la API key de Gemini. Agrega GEMINI_API_KEY o VITE_GEMINI_API_KEY en tu archivo .env y reinicia el servidor.',
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, missingKeyMessage]);
+      return;
+    }
+
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
@@ -42,7 +100,18 @@ export default function AIAssistantPage() {
       timestamp: new Date()
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    const assistantMessageId = (Date.now() + 1).toString();
+
+    setMessages((prev) => [
+      ...prev,
+      userMessage,
+      {
+        id: assistantMessageId,
+        role: 'assistant',
+        content: '',
+        timestamp: new Date()
+      }
+    ]);
     setInput('');
     setIsTyping(true);
 
@@ -59,31 +128,28 @@ export default function AIAssistantPage() {
         parts: [{ text: input }]
       });
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: history,
-        config: {
-          systemInstruction: "Eres la 'Gema de Ingeniería' de Whirlpool, un asistente experto en IA y procesos corporativos. Tu objetivo es ayudar a los empleados a optimizar sus flujos de trabajo, aprender sobre IA generativa y utilizar las herramientas de GIT Labs. Sé profesional, servicial y enfocado en la eficiencia técnica. Responde siempre en español.",
-        }
-      });
-
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: response.text || "Lo siento, no pude procesar tu solicitud en este momento.",
-        timestamp: new Date()
-      };
-
-      setMessages(prev => [...prev, assistantMessage]);
+      const finalText = await generateAssistantReply(history);
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === assistantMessageId
+            ? {
+                ...message,
+                content: finalText
+              }
+            : message
+        )
+      );
     } catch (error) {
       console.error("Gemini API Error:", error);
       const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: assistantMessageId,
         role: 'assistant',
         content: "Hubo un error al conectar con el servicio de IA. Por favor, intenta de nuevo más tarde.",
         timestamp: new Date()
       };
-      setMessages(prev => [...prev, errorMessage]);
+      setMessages((prev) =>
+        prev.map((message) => (message.id === assistantMessageId ? errorMessage : message))
+      );
     } finally {
       setIsTyping(false);
     }
@@ -96,12 +162,8 @@ export default function AIAssistantPage() {
           {messages.map((msg) => (
             <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} items-end gap-3`}>
               {msg.role === 'assistant' && (
-                <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center overflow-hidden flex-shrink-0 shadow-sm">
-                  <img 
-                    src={whirlpoolLogo}
-                    alt="Whirlpool" 
-                    className="w-5 h-5 object-contain"
-                  />
+                <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center flex-shrink-0 shadow-sm text-primary">
+                  <span className="material-symbols-outlined text-[18px] material-symbols-fill">smart_toy</span>
                 </div>
               )}
               <div className={`max-w-[85%] sm:max-w-[70%] rounded-2xl p-4 shadow-sm ${
@@ -109,22 +171,51 @@ export default function AIAssistantPage() {
                 ? 'bg-primary text-white' 
                 : 'bg-white border border-slate-200 text-on-surface'
               }`}>
-                <p className="text-sm sm:text-base leading-relaxed">{msg.content}</p>
+                {msg.role === 'assistant' ? (
+                  <div className="prose prose-slate prose-sm sm:prose-base max-w-none prose-headings:text-on-surface prose-p:text-slate-700 prose-li:text-slate-700 prose-strong:text-on-surface prose-a:text-primary prose-a:no-underline hover:prose-a:underline prose-table:text-sm prose-table:my-0 prose-th:bg-slate-50 prose-th:font-bold prose-th:text-slate-700 prose-td:align-top prose-td:text-slate-700 prose-code:text-primary prose-code:bg-slate-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded-md prose-pre:bg-slate-950 prose-pre:text-slate-100 prose-pre:rounded-xl prose-pre:border prose-pre:border-slate-200 prose-pre:p-4 prose-blockquote:border-primary/30 prose-blockquote:text-slate-600">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        h1: ({ children }) => <h1>{children}</h1>,
+                        h2: ({ children }) => <h2>{children}</h2>,
+                        h3: ({ children }) => <h3>{children}</h3>,
+                        p: ({ children }) => <p>{children}</p>,
+                        ul: ({ children }) => <ul>{children}</ul>,
+                        ol: ({ children }) => <ol>{children}</ol>,
+                        li: ({ children }) => <li>{children}</li>,
+                        strong: ({ children }) => <strong>{children}</strong>,
+                        em: ({ children }) => <em>{children}</em>,
+                        code: ({ className, children, ...props }: any) =>
+                          <code className={className} {...props}>
+                            {children}
+                          </code>,
+                        blockquote: ({ children }) => <blockquote>{children}</blockquote>,
+                        table: ({ children }) => <table>{children}</table>,
+                        thead: ({ children }) => <thead>{children}</thead>,
+                        tbody: ({ children }) => <tbody>{children}</tbody>,
+                        tr: ({ children }) => <tr>{children}</tr>,
+                        th: ({ children }) => <th>{children}</th>,
+                        td: ({ children }) => <td>{children}</td>,
+                        a: ({ href, children }) => (
+                          <a href={href} target="_blank" rel="noreferrer">
+                            {children}
+                          </a>
+                        ),
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  <p className="text-sm sm:text-base leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                )}
                 <p className={`text-[10px] mt-2 font-bold uppercase tracking-widest ${msg.role === 'user' ? 'text-white/60' : 'text-slate-400'}`}>
                   {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </p>
               </div>
             </div>
           ))}
-          {isTyping && (
-            <div className="flex justify-start">
-              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex gap-1">
-                <span className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce"></span>
-                <span className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce [animation-delay:0.2s]"></span>
-                <span className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce [animation-delay:0.4s]"></span>
-              </div>
-            </div>
-          )}
+          {isTyping && <ThinkingIndicator />}
           <div ref={messagesEndRef} />
         </div>
       </div>

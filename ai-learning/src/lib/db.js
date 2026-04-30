@@ -1,23 +1,61 @@
-import mysql from 'mysql2/promise';
+// Conexión a Supabase, ya no es mysql
 
-let pool = null;
+import { createClient } from '@supabase/supabase-js';
 
-export function getPool() {
-  if (!pool) {
-    pool = mysql.createPool({
-      host:     import.meta.env.DB_HOST,
-      port:     Number(import.meta.env.DB_PORT),
-      database: import.meta.env.DB_NAME,
-      user:     import.meta.env.DB_USER,
-      password: import.meta.env.DB_PASSWORD,
-      connectionLimit: 10,
-      charset: 'utf8mb4',
-    });
+let _supabase = null;
+
+export function getSupabase() {
+  if (!_supabase) {
+    _supabase = createClient(
+      import.meta.env.SUPABASE_URL,
+      import.meta.env.SUPABASE_SERVICE_ROLE_KEY, // server-side siempre usa service role
+      { auth: { persistSession: false } }
+    );
   }
-  return pool;
+  return _supabase;
 }
 
-export async function query(sql, params = []) {
-  const [rows] = await getPool().execute(sql, params);
-  return rows;
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+export async function query(table, builder) {
+  const sb = getSupabase();
+  const q = builder ? builder(sb.from(table)) : sb.from(table).select('*');
+  const { data, error } = await q;
+  if (error) throw new Error(`[db] ${table}: ${error.message}`);
+  return data ?? [];
+}
+
+export async function queryOne(table, builder) {
+  const sb = getSupabase();
+  const ref = builder ? builder(sb.from(table)) : sb.from(table).select('*');
+  const { data, error } = await ref.limit(1).maybeSingle();
+  if (error) throw new Error(`[db] ${table}: ${error.message}`);
+  return data ?? null;
+}
+
+export async function insert(table, values) {
+  const { data, error } = await getSupabase()
+    .from(table)
+    .insert(values)
+    .select()
+    .single();
+  if (error) throw new Error(`[db:insert] ${table}: ${error.message}`);
+  return data;
+}
+
+export async function update(table, values, col, val) {
+  const { data, error } = await getSupabase()
+    .from(table)
+    .update(values)
+    .eq(col, val)
+    .select()
+    .single();
+  if (error) throw new Error(`[db:update] ${table}: ${error.message}`);
+  return data;
+}
+
+export async function remove(table, col, val) {
+  const { error } = await getSupabase().from(table).delete().eq(col, val);
+  if (error) throw new Error(`[db:delete] ${table}: ${error.message}`);
+  return { success: true };
 }
