@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { getLessonDetail, markLessonCompleted } from '../lib/courseService';
+import { getLessonDetail, markLessonCompleted, getCourseDetail } from '../lib/courseService';
 import { supabase } from '../lib/supabaseClient';
 
 type ModuleComment = {
@@ -24,6 +24,8 @@ export default function LessonPage({ user }: { user: any }) {
   const [loading, setLoading] = useState(true);
   const [commentInput, setCommentInput] = useState('');
   const [moduleComments, setModuleComments] = useState<ModuleComment[]>([]);
+  const [hasQuiz, setHasQuiz] = useState(false);
+  const [nextLessonId, setNextLessonId] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadLesson() {
@@ -32,6 +34,25 @@ export default function LessonPage({ user }: { user: any }) {
         const data = await getLessonDetail(lessonId, user?.id);
         console.log('LESSON DETAIL:', data);
         setLesson(data);
+        
+        // Verificar si hay quiz
+        const hasQuizData = data?.quizzes && data.quizzes.length > 0;
+        setHasQuiz(hasQuizData);
+        
+        // Obtener siguiente módulo
+        if (data?.courses?.id) {
+          try {
+            const course = await getCourseDetail(data.courses.id, user?.id);
+            const lessons = course?.lessons || [];
+            const currentIndex = lessons.findIndex((l: any) => String(l.id) === String(lessonId));
+            
+            if (currentIndex !== -1 && currentIndex < lessons.length - 1) {
+              setNextLessonId(String(lessons[currentIndex + 1].id));
+            }
+          } catch (err) {
+            console.error('Error obteniendo siguiente módulo:', err);
+          }
+        }
       } catch (err) {
         console.error('Error cargando lesson:', err);
       } finally {
@@ -119,6 +140,16 @@ export default function LessonPage({ user }: { user: any }) {
     }
   };
 
+  const handleNextModule = async () => {
+    if (!nextLessonId) return;
+    try {
+      await markLessonCompleted(user.id, lesson.id);
+      navigate(`/lesson/${nextLessonId}`);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   if (loading) {
     return <div className="p-10 text-center text-slate-500">Cargando contenido...</div>;
   }
@@ -154,7 +185,7 @@ export default function LessonPage({ user }: { user: any }) {
           {lesson.title}
         </h1>
         <p className="text-slate-500 font-medium">
-          Estudia el contenido de {lesson.courses?.title} y continúa al quiz cuando termines.
+          Estudia el contenido de {lesson.courses?.title} y continúa {hasQuiz ? 'al quiz' : 'al siguiente módulo'} cuando termines.
         </p>
       </header>
 
@@ -306,13 +337,31 @@ export default function LessonPage({ user }: { user: any }) {
             </div>
           </div>
 
-          <button
-            onClick={handleContinueQuiz}
-            className="w-full py-4 bg-primary text-white font-bold rounded-2xl shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
-          >
-            Continuar al Quiz
-            <span className="material-symbols-outlined">arrow_forward</span>
-          </button>
+          {hasQuiz ? (
+            <button
+              onClick={handleContinueQuiz}
+              className="w-full py-4 bg-primary text-white font-bold rounded-2xl shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
+            >
+              Continuar al Quiz
+              <span className="material-symbols-outlined">arrow_forward</span>
+            </button>
+          ) : nextLessonId ? (
+            <button
+              onClick={handleNextModule}
+              className="w-full py-4 bg-primary text-white font-bold rounded-2xl shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
+            >
+              Siguiente Módulo
+              <span className="material-symbols-outlined">arrow_forward</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => navigate(`/courses/${lesson.courses?.id}`)}
+              className="w-full py-4 bg-green-600 text-white font-bold rounded-2xl shadow-lg shadow-green-600/20 hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
+            >
+              ✓ Curso Completado
+              <span className="material-symbols-outlined">check_circle</span>
+            </button>
+          )}
         </div>
       </section>
     </div>
