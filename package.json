@@ -11,7 +11,8 @@
     "build:client": "vite build",
     "build": "npm run build:server && npm run build:client",
     "preview": "vite preview",
-    "start": "node dist/server/index.js"
+    "start": "node dist/server/index.js",
+    "test": "NODE_ENV=test jest --runInBand"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
@@ -30,12 +31,17 @@
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.1",
+    "@types/jest": "^29.5.3",
     "@types/multer": "^2.0.0",
     "@types/node": "^22.15.18",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
+    "@types/supertest": "^2.0.12",
     "@vitejs/plugin-react": "^4.4.1",
     "concurrently": "^9.1.2",
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3",
+    "ts-jest": "^29.1.0",
     "tsx": "^4.20.4",
     "typescript": "^5.8.3",
     "vite": "^6.3.2"

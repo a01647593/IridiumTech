@@ -204,7 +204,8 @@ export async function addUpload(input: Omit<UploadRecord, 'id' | 'uploadedAt'> &
   const record: UploadRecord = {
     ...input,
     id: createId('upl'),
-    uploadedAt: input.uploadedAt ?? new Date().toISOString()
+    uploadedAt: input.uploadedAt ?? new Date().toISOString(),
+    extractedText: (input as any).extractedText
   };
   state.uploads.push(record);
   await writeState(state);

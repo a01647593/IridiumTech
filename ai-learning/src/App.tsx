@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Layout from './components/Layout';
-import { supabase } from './lib/supabaseClient';
-import { updateStreak } from './lib/userService';
-
+import { isSupabaseConfigured, supabase } from './lib/supabaseClient';
 import AIAssistantPage from './pages/AIAssistantPage';
 import CompleteProfilePage from './pages/CompleteProfilePage';
 import ContentManagementPage from './pages/ContentManagementPage';
@@ -23,6 +21,7 @@ import QuizPage from './pages/QuizPage';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
 import UserManagementPage from './pages/UserManagementPage';
 import { getUserProfile } from './lib/profileService';
+import { updateStreak } from './lib/userService';
 
 import type { User, UserRole } from './types';
 
@@ -42,10 +41,27 @@ function AppContent() {
   useEffect(() => {
     let isMounted = true;
 
-    localStorage.removeItem(USER_STORAGE_KEY);
+    const restoreUser = (): User | null => {
+      const saved = localStorage.getItem(USER_STORAGE_KEY);
+      if (!saved) return null;
+      try {
+        return JSON.parse(saved) as User;
+      } catch {
+        localStorage.removeItem(USER_STORAGE_KEY);
+        return null;
+      }
+    };
 
     const syncAuthUser = async () => {
-      localStorage.removeItem(USER_STORAGE_KEY);
+      const localUser = restoreUser();
+      if (isMounted && localUser) {
+        setUser(localUser);
+      }
+
+      if (!isSupabaseConfigured) {
+        setIsAuthReady(true);
+        return;
+      }
 
       const { data, error } = await supabase.auth.getUser();
       if (!isMounted) return;

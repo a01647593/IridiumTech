@@ -3,6 +3,7 @@ import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import whirlpoolLogo from '../assets/logowhirlpoolblack.png';
 import { loginWithGoogle } from '../lib/auth';
+import { findAuthAccount } from '../lib/authApi';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import type { User } from '../types';
 import { getUserProfile } from '../lib/profileService';
@@ -51,6 +52,32 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
 
     try {
       const normalizedEmail = email.trim().toLowerCase();
+
+      if (!isSupabaseConfigured) {
+        const account = findAuthAccount(normalizedEmail, password);
+        if (!account) {
+          setErrors({ credentials: 'Correo o contraseña incorrectos.' });
+          return;
+        }
+
+        onLogin({
+          id: account.email,
+          email: account.email,
+          role: account.role,
+          name: account.name,
+          avatar: `https://picsum.photos/seed/${account.email}/100/100`,
+          area: account.area,
+          gender: 'M',
+          score: 0,
+          badges: [],
+          completedCourses: [],
+          pendingCourses: [],
+          streak: 0,
+          completedQuizzesCount: 0,
+          savedPrompts: [],
+        });
+        return;
+      }
 
       const { data, error } = await supabase.auth.signInWithPassword({
         email: normalizedEmail,

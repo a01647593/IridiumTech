@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo, type ChangeEvent } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -16,6 +16,13 @@ const sanitizeEnvValue = (value: unknown) => {
   return value.trim().replace(/^['"]|['"]$/g, '');
 };
 
+type AttachedDocument = {
+  name: string;
+  text: string;
+};
+
+const USER_STORAGE_KEY = 'whirlpool_user';
+
 const geminiApiKey =
   sanitizeEnvValue((import.meta as { env?: Record<string, string> }).env?.VITE_GEMINI_API_KEY) ||
   '';
@@ -27,7 +34,10 @@ const geminiModelFallbacks = [geminiModel, 'gemini-2.5-flash', 'gemini-2.0-flash
 
 const ai = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
 
-async function generateAssistantReply(history: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>) {
+async function generateAssistantReply(
+  history: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>,
+  technicalContext?: string
+) {
   if (!ai) {
     throw new Error('Falta configurar la API key de Gemini.');
   }
@@ -41,7 +51,9 @@ async function generateAssistantReply(history: Array<{ role: 'user' | 'model'; p
         model,
         contents: history,
         config: {
-          systemInstruction: 'Eres el asistente virtual de soporte para la nueva Plataforma Adaptativa de Whirlpool. Tu ÚNICA función es ayudar a los usuarios a navegar por esta plataforma, usar sus funciones y entender su interfaz. Tu ÚNICA fuente de verdad es el texto proporcionado bajo la etiqueta [CONTEXTO DE LA PLATAFORMA]. Si el usuario pregunta algo que no está en ese contexto (incluso si es sobre electrodomésticos Whirlpool, reparaciones, o temas externos), tienes estrictamente prohibido inventar o adivinar. Responde siempre: Lo siento, solo puedo ayudarte con dudas sobre el uso y las funciones de esta plataforma adaptativa.'
+          systemInstruction: technicalContext
+            ? `Eres el asistente virtual de soporte para la nueva Plataforma Adaptativa de Whirlpool. Tu función principal es ayudar a los usuarios a navegar por esta plataforma, usar sus funciones y entender su interfaz. La siguiente información de PDFs adjuntos es contexto válido y debe priorizarse cuando el usuario pregunte por esos documentos. No inventes ni adivines contenido fuera de lo adjunto.\n\n[CONTEXTO_DE_LA_PLATAFORMA]\n${technicalContext}\n[/CONTEXTO_DE_LA_PLATAFORMA]`
+            : 'Eres el asistente virtual de soporte para la nueva Plataforma Adaptativa de Whirlpool. Tu ÚNICA función es ayudar a los usuarios a navegar por esta plataforma, usar sus funciones y entender su interfaz. Tu ÚNICA fuente de verdad es el texto proporcionado bajo la etiqueta [CONTEXTO_DE_LA_PLATAFORMA]. Si el usuario pregunta algo que no está en ese contexto, tienes estrictamente prohibido inventar o adivinar. Responde siempre: Lo siento, solo puedo ayudarte con dudas sobre el uso y las funciones de esta plataforma adaptativa.'
         }
       });
 
@@ -63,13 +75,16 @@ export default function AIAssistantPage() {
     {
       id: '1',
       role: 'assistant',
-      content: 'Hola, soy el bot de Ingeniería de Whirlpool. ¿En qué puedo ayudarte hoy con tus procesos o aprendizaje de IA?',
+  content: 'Hola, soy el bot de Ingeniería de Whirlpool. Puedes preguntarme sobre materiales, cursos o PDFs que hayas adjuntado.',
       timestamp: new Date()
     }
   ]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [attachedDocuments, setAttachedDocuments] = useState<AttachedDocument[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -78,6 +93,83 @@ export default function AIAssistantPage() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  const attachedContext = useMemo(() => {
+    if (!attachedDocuments.length) return '';
+    return attachedDocuments
+      .map((document) => `Documento adjunto: ${document.name}\n${document.text}`)
+      .join('\n\n---\n\n');
+  }, [attachedDocuments]);
+
+  const handleAttachClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file || isUploading) return;
+
+    if (!file.type.includes('pdf') && !file.name.toLowerCase().endsWith('.pdf')) {
+      setMessages((prev) => [...prev, {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: 'Solo puedo procesar archivos PDF en este asistente.',
+        timestamp: new Date()
+      }]);
+      return;
+    }
+
+    const storedUserRaw = localStorage.getItem(USER_STORAGE_KEY);
+    const storedUser = storedUserRaw ? JSON.parse(storedUserRaw) as { id?: string } : null;
+    const userId = typeof storedUser?.id === 'string' && storedUser.id.trim() ? storedUser.id : 'persona-4';
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('userId', userId);
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error ?? 'No se pudo cargar el PDF.');
+      }
+
+      const extractedText = typeof payload?.upload?.extractedText === 'string' ? payload.upload.extractedText.trim() : '';
+      if (extractedText) {
+        setAttachedDocuments((prev) => [...prev, { name: file.name, text: extractedText }]);
+        setMessages((prev) => [...prev, {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: `PDF cargado y leído: **${file.name}**. Ya puedo usar su contenido en las respuestas.`,
+          timestamp: new Date()
+        }]);
+      } else {
+        setMessages((prev) => [...prev, {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: `El archivo **${file.name}** se cargó, pero no se pudo extraer texto legible.`,
+          timestamp: new Date()
+        }]);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'No se pudo cargar el archivo.';
+      setMessages((prev) => [...prev, {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: message,
+        timestamp: new Date()
+      }]);
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const handleSend = async () => {
     if (!input.trim() || isTyping) return;
@@ -117,7 +209,7 @@ export default function AIAssistantPage() {
 
     try {
       // Prepare history for Gemini
-      const history = messages.map(msg => ({
+      const history: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = messages.map((msg) => ({
         role: msg.role === 'user' ? 'user' : 'model',
         parts: [{ text: msg.content }]
       }));
@@ -128,7 +220,7 @@ export default function AIAssistantPage() {
         parts: [{ text: input }]
       });
 
-      const finalText = await generateAssistantReply(history);
+      const finalText = await generateAssistantReply(history, attachedContext || undefined);
       setMessages((prev) =>
         prev.map((message) =>
           message.id === assistantMessageId
@@ -223,7 +315,19 @@ export default function AIAssistantPage() {
       <div className="fixed bottom-0 right-0 w-full lg:w-[calc(100%-16rem)] bg-gradient-to-t from-slate-50 via-slate-50 to-transparent pt-10 pb-6 sm:pb-10 px-4 sm:px-8 z-30">
         <div className="max-w-4xl mx-auto">
           <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 flex items-center p-1 sm:p-2 group focus-within:ring-2 focus-within:ring-primary transition-all">
-            <button className="p-2 sm:p-4 text-slate-400 hover:text-primary rounded-xl hover:bg-slate-50 transition-colors">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/pdf,.pdf"
+              className="hidden"
+              onChange={handleFileSelected}
+            />
+            <button
+              type="button"
+              onClick={handleAttachClick}
+              className="p-2 sm:p-4 text-slate-400 hover:text-primary rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-50"
+              disabled={isUploading}
+            >
               <span className="material-symbols-outlined">attach_file</span>
             </button>
             <textarea 
@@ -241,12 +345,25 @@ export default function AIAssistantPage() {
             <div className="flex gap-2 pr-1 sm:pr-2">
               <button 
                 onClick={handleSend}
-                className="bg-primary text-white w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all"
+                disabled={isUploading}
+                className="bg-primary text-white w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all disabled:opacity-60 disabled:hover:scale-100"
               >
-                <span className="material-symbols-outlined material-symbols-fill text-lg sm:text-xl">send</span>
+                <span className="material-symbols-outlined material-symbols-fill text-lg sm:text-xl">
+                  {isUploading ? 'progress_activity' : 'send'}
+                </span>
               </button>
             </div>
           </div>
+          {attachedDocuments.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {attachedDocuments.map((document) => (
+                <span key={`${document.name}-${document.text.length}`} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm">
+                  <span className="material-symbols-outlined text-[16px] text-primary">picture_as_pdf</span>
+                  {document.name}
+                </span>
+              ))}
+            </div>
+          )}
           <p className="text-center text-[10px] text-slate-400 mt-3 font-bold uppercase tracking-widest">
             GIT Labs AI Assistant • Whirlpool Proprietary Information
           </p>

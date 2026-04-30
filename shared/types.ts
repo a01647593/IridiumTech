@@ -63,6 +63,7 @@ export interface UploadRecord {
   fileType: string;
   size: number;
   uploadedAt: string;
+  extractedText?: string;
 }
 
 export interface EventRecord {
