@@ -15,7 +15,7 @@ export default function Sidebar({ activePage, user, onLogout, isOpen, onClose }:
   const commonNavItems = [
     { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', path: '/dashboard', roles: ['user', 'content-admin', 'super-admin'] },
     { id: 'courses', label: 'Cursos', icon: 'school', path: '/courses', roles: ['user', 'content-admin', 'super-admin'] },
-    { id: 'prompts', label: 'Biblioteca de Gemas', icon: 'auto_awesome', path: '/prompts', roles: ['user', 'content-admin', 'super-admin'] },
+    //{ id: 'prompts', label: 'Biblioteca de Gemas', icon: 'auto_awesome', path: '/prompts', roles: ['user', 'content-admin', 'super-admin'] },
     { id: 'leaderboard', label: 'Leaderboard', icon: 'leaderboard', path: '/leaderboard', roles: ['user', 'content-admin', 'super-admin'] },
     { id: 'assistant', label: 'Asistente IA', icon: 'smart_toy', path: '/assistant', roles: ['user', 'content-admin', 'super-admin'] },
     { id: 'help', label: 'Ayuda & FAQ', icon: 'help', path: '/help', roles: ['user', 'content-admin', 'super-admin'] },

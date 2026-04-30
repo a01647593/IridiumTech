@@ -16,12 +16,13 @@ const authClient = createClient(supabaseUrl || 'http://localhost', supabaseAnonK
   }
 });
 
-const adminClient = createClient(supabaseUrl || 'http://localhost', supabaseServiceRoleKey || supabaseAnonKey || 'public-anon-key', {
+export const adminClient = createClient(supabaseUrl || 'http://localhost', supabaseServiceRoleKey || supabaseAnonKey || 'public-anon-key', {
   auth: {
     autoRefreshToken: false,
     persistSession: false
   }
 });
+// exported for scripts and server utilities
 
 const geminiApiKey = process.env.GEMINI_API_KEY ?? process.env.VITE_GEMINI_API_KEY ?? '';
 const geminiEmbeddingModel = process.env.GEMINI_EMBEDDING_MODEL ?? '';
@@ -54,6 +55,16 @@ export type ChatMessageInsert = {
 
 export type WhirlpoolManualMatch = {
   id?: string;
+  content?: string;
+  metadata?: Record<string, unknown>;
+  similarity?: number;
+  [key: string]: unknown;
+};
+
+export type CourseDocumentMatch = {
+  id?: string;
+  course_id?: string;
+  lesson_id?: string;
   content?: string;
   metadata?: Record<string, unknown>;
   similarity?: number;
@@ -190,4 +201,80 @@ export async function getKbDocumentsByFileName(fileName: string) {
 
   const rows = (data ?? []) as Array<{ content?: string; metadata?: Record<string, any> }>;
   return rows.filter((r) => r.metadata && r.metadata.file_name === fileName);
+}
+
+export async function getUserCourses(userId: string) {
+  if (!userId) return [];
+  const { data, error } = await adminClient
+    .from('course_assignments')
+    .select('course_id, courses(title, description, active)')
+    .eq('user_id', userId)
+    .order('assigned_at', { ascending: false });
+
+  if (error) {
+    throw new Error(`No se pudo leer course_assignments: ${error.message}`);
+  }
+
+  const courses = (data ?? []).map((r: any) => ({
+    id: r.course_id,
+    title: r.courses?.title ?? null,
+    description: r.courses?.description ?? null,
+    active: r.courses?.active ?? true
+  }));
+
+  return courses;
+}
+
+/**
+ * Query course_documents using RPC match_course_documents.
+ * Searches vectorially for similar content in a specific course.
+ * Optionally filters by user_id for privacy.
+ */
+export async function matchCourseDocuments(
+  courseId: string,
+  question: string,
+  matchCount = 5,
+  userId?: string
+): Promise<CourseDocumentMatch[]> {
+  if (!courseId) return [];
+
+  const queryEmbedding = await embedWhirlpoolQuestion(question);
+
+  const { data, error } = await adminClient.rpc('match_course_documents', {
+    query_embedding: queryEmbedding,
+    course_id_param: courseId,
+    match_count: matchCount,
+    user_id_param: userId ?? null
+  });
+
+  if (error) {
+    throw new Error(`No se pudo ejecutar match_course_documents: ${error.message}`);
+  }
+
+  return (data ?? []) as CourseDocumentMatch[];
+}
+
+/**
+ * Get course documents for multiple courses (convenience for RAG).
+ * Takes a list of course IDs and a query, returns best matches per course.
+ */
+export async function matchCourseDocumentsMultiple(
+  courseIds: string[],
+  question: string,
+  matchCount = 3,
+  userId?: string
+): Promise<CourseDocumentMatch[]> {
+  if (!courseIds || courseIds.length === 0) return [];
+
+  const results: CourseDocumentMatch[] = [];
+  for (const courseId of courseIds) {
+    try {
+      const matches = await matchCourseDocuments(courseId, question, matchCount, userId);
+      results.push(...matches);
+    } catch (err) {
+      console.warn(`[supabase] Failed matching documents for course ${courseId}:`, err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return results;
 }

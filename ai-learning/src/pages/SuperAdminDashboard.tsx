@@ -33,12 +33,12 @@ export default function SuperAdminDashboard() {
           <p className="text-slate-500 font-medium">Panel de control global de adopción de IA en Whirlpool.</p>
         </div>
         <div className="flex gap-3">
-          <button className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 flex items-center gap-2 hover:bg-slate-50 transition-all">
+          {/*<button className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 flex items-center gap-2 hover:bg-slate-50 transition-all">
             <span className="material-symbols-outlined text-sm">download</span> Exportar Reporte
           </button>
           <button className="px-4 py-2 bg-primary text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-primary/20 hover:scale-105 transition-all">
             <span className="material-symbols-outlined text-sm">settings</span> Configuración
-          </button>
+          </button> */}
         </div>
       </header>
 
@@ -127,7 +127,7 @@ export default function SuperAdminDashboard() {
       <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-8 border-b border-slate-50 flex justify-between items-center">
           <h3 className="text-lg font-bold text-on-surface">Desempeño por Departamento</h3>
-          <button className="text-primary text-xs font-bold hover:underline">Ver todos los detalles</button>
+          {/*<button className="text-primary text-xs font-bold hover:underline">Ver todos los detalles</button>*/}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">

@@ -67,7 +67,7 @@ export default function AIAssistantPage() {
     {
       id: '1',
       role: 'assistant',
-      content: 'Hola, soy la Gema de Ingeniería de Whirlpool. ¿En qué puedo ayudarte hoy con tus procesos o aprendizaje de IA?',
+      content: 'Hola, soy el bot de Ingeniería de Whirlpool. ¿En qué puedo ayudarte hoy con tus procesos o aprendizaje de IA?',
       timestamp: new Date()
     }
   ]);
@@ -232,7 +232,7 @@ export default function AIAssistantPage() {
             </button>
             <textarea 
               className="flex-1 bg-transparent border-none focus:ring-0 text-slate-900 py-3 sm:py-4 px-2 resize-none h-12 sm:h-14 max-h-40 font-medium placeholder:text-slate-400 text-sm sm:text-base" 
-              placeholder="Pregúntale a la Gema de Ingeniería..."
+              placeholder="Pregúntale al bot de Ingeniería..."
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
