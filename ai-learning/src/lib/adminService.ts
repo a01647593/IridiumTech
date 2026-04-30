@@ -1,41 +1,34 @@
 //De aqui salen las metricas para el adminDashboard
 
-// src/lib/adminService.ts
 import { supabase } from './supabaseClient';
 
 export async function getAdminDashboardStats() {
   try {
-    //Total de usuarios verificados/activos
     const { count: usersCount } = await supabase
       .from('users')
       .select('id', { count: 'exact', head: true })
       .eq('empleado_verificado', true);
 
-    // Cursos activos
     const { count: coursesCount } = await supabase
       .from('courses')
       .select('id', { count: 'exact', head: true })
       .eq('active', true);
 
-    // Total de lecciones completadas por todos los usuarios
     const { count: completedLessonsCount } = await supabase
       .from('lesson_progress')
       .select('lesson_id', { count: 'exact', head: true });
 
-    // Cursos en progreso actualmente
     const { count: assignmentsCount } = await supabase
       .from('course_assignments')
       .select('id', { count: 'exact', head: true })
       .is('completed_at', null);
 
-    // Conteo de Content Admins
     const { data: adminsData } = await supabase
       .from('user_roles')
       .select('roles!inner(name)');
       
     const contentAdminsCount = adminsData?.filter((r: any) => r.roles.name === 'content-admin').length || 0;
 
-    // Datos para la gráfica: Participación por Área (Top 5)
     const { data: usersData } = await supabase
       .from('users')
       .select('departments(name)');
@@ -68,16 +61,13 @@ export async function getAdminDashboardStats() {
 
 export async function getSuperAdminStats() {
   try {
-    // Usuarios Totales y Activos
     const { count: totalUsers } = await supabase.from('users').select('*', { count: 'exact', head: true });
     const { count: activeUsers } = await supabase.from('users').select('*', { count: 'exact', head: true }).eq('empleado_verificado', true);
 
-    // Tasa de Finalización Global (Cursos completados vs Asignados)
     const { count: totalAssignments } = await supabase.from('course_assignments').select('*', { count: 'exact', head: true });
     const { count: completedAssignments } = await supabase.from('course_assignments').select('*', { count: 'exact', head: true }).not('completed_at', 'is', null);
     const completionRate = totalAssignments ? Math.round((completedAssignments / totalAssignments) * 100) : 0;
 
-    // Score Promedio
     const { data: attempts } = await supabase.from('attempts').select('score');
     const validScores = attempts?.filter(a => a.score > 0) || [];
     const avgScore = validScores.length ? Math.round(validScores.reduce((acc, a) => acc + a.score, 0) / validScores.length) : 0;
@@ -116,19 +106,16 @@ export async function getSuperAdminStats() {
 
     const areaMetrics = Object.entries(areaStats).map(([area, data]) => {
        const engagement = data.totalAssigned ? Math.round((data.completed / data.totalAssigned) * 100) : 0;
-       // Cálculo aproximado de abandono (asignados no completados)
        const abandonmentRate = data.totalAssigned ? Math.round(((data.totalAssigned - data.completed) / data.totalAssigned) * 10) : 0; 
        return { area, count: data.count, engagement, abandonmentRate };
     }).sort((a, b) => b.count - a.count);
 
-    // Formatear para Gráfica de Tendencia (Acumulando mes a mes)
     const sortedMonths = Object.keys(monthlyTrend).sort();
     let cumulativeUsers = 0;
     const adoptionTrend = sortedMonths.map(month => {
        cumulativeUsers += monthlyTrend[month];
-       // Cambiamos el formato a algo más legible (ej. 2026-04)
        return { date: month, users: cumulativeUsers };
-    }).slice(-6); // Tomamos solo los últimos 6 meses
+    }).slice(-6);
 
     return {
       totalUsers: totalUsers || 0,

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { getLeaderboardData } from '../lib/adminService'; // Ajusta la ruta si es necesario
+import { getLeaderboardData } from '../lib/adminService';
 
 export default function LeaderboardPage() {
   const [topUsers, setTopUsers] = useState<any[]>([]);
@@ -10,7 +10,6 @@ export default function LeaderboardPage() {
   useEffect(() => {
     async function loadData() {
       const { topUsers: users, topAreas: areas } = await getLeaderboardData();
-      // Aseguramos que siempre haya al menos 3 usuarios para no romper el podium
       const paddedUsers = [...users];
       while (paddedUsers.length < 3) {
         paddedUsers.push({ rank: paddedUsers.length + 1, name: '---', area: '---', score: 0, avatar: 'https://picsum.photos/seed/empty/200' });

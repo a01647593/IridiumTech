@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { listCourses } from '../lib/courseService'; // <-- Importamos tu servicio real
+import { listCourses } from '../lib/courseService';
 
-// Añadimos la prop del usuario para poder enviarlo a la BD y calcular su progreso
 export default function CourseCatalogPage({ user }: { user?: any }) {
   const navigate = useNavigate();
-  const [courses, setCourses] = useState<any[]>([]); // Usamos any o Course ajustado
+  const [courses, setCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedArea, setSelectedArea] = useState('Todas');
   const [selectedLevel, setSelectedLevel] = useState('Todos');
@@ -15,7 +14,6 @@ export default function CourseCatalogPage({ user }: { user?: any }) {
     async function loadCatalog() {
       setLoading(true);
       try {
-        // Pedimos los cursos al servicio, pasando el ID del usuario si existe
         const data = await listCourses({ usuarioId: user?.id, soloActivos: true });
         setCourses(data);
       } catch (error) {
@@ -94,7 +92,6 @@ export default function CourseCatalogPage({ user }: { user?: any }) {
                 className="group bg-white rounded-[2.5rem] overflow-hidden cursor-pointer border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all flex flex-col"
               >
                 <div className="h-56 overflow-hidden relative bg-slate-100">
-                  {/* Se mantiene el fallback por si algún curso no tiene imagen */}
                   <img 
                     className="w-full h-full object-cover group-hover:scale-110 transition-all duration-700" 
                     src={course.thumbnail || `https://picsum.photos/seed/${course.id}/600/400`} 

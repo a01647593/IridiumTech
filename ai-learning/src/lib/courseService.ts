@@ -153,7 +153,6 @@ export async function getLessonDetail(lessonId: string) {
 }
 
 export async function markLessonCompleted(userId: string, lessonId: string) {
-  // 1. Obtenemos a qué curso pertenece esta lección
   const { data: lesson } = await supabase
     .from('lessons')
     .select('course_id')
@@ -163,7 +162,6 @@ export async function markLessonCompleted(userId: string, lessonId: string) {
   if (!lesson) return;
   const courseId = lesson.course_id;
 
-  // 2. INSCRIPCIÓN AUTOMÁTICA (Corregido: sin campo status)
   const { error: assignmentError } = await supabase
     .from('course_assignments')
     .upsert({ 
@@ -176,7 +174,6 @@ export async function markLessonCompleted(userId: string, lessonId: string) {
     console.error("🚨 Error escribiendo en course_assignments:", assignmentError);
   }
 
-  // 3. REGISTRAMOS QUE TERMINASTE ESTA LECCIÓN EN ESPECÍFICO
   const { error: progressError } = await supabase
     .from('lesson_progress')
     .upsert({
@@ -189,7 +186,6 @@ export async function markLessonCompleted(userId: string, lessonId: string) {
     console.error("🚨 Error en lesson_progress:", progressError);
   }
 
-  // 4. VERIFICAMOS SI YA TERMINASTE TODO EL CURSO
   const [{ count: total }, { count: done }] = await Promise.all([
     supabase.from('lessons').select('*', { count: 'exact', head: true }).eq('course_id', courseId),
     supabase.from('lesson_progress')
@@ -198,7 +194,6 @@ export async function markLessonCompleted(userId: string, lessonId: string) {
       .eq('lessons.course_id', courseId)
   ]);
 
-  // 5. SI TERMINASTE TODAS LAS LECCIONES, CERRAMOS EL CURSO (Corregido: solo usamos completed_at)
   if (total !== null && total > 0 && total === done) {
     const { error: completeError } = await supabase
       .from('course_assignments')

@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { getAdminDashboardStats } from '../lib/adminService'; // Asegúrate de importar el servicio
+import { getAdminDashboardStats } from '../lib/adminService';
 
 export default function AdminDashboardPage() {
   const navigate = useNavigate();
   
-  // Estado para almacenar las métricas reales
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 

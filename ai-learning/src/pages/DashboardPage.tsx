@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { listCourses } from '../lib/courseService';
-import { getUserProfile } from '../lib/profileService'; // <-- Importamos tu servicio
+import { getUserProfile } from '../lib/profileService';
 
 interface DashboardPageProps {
   user: any;
@@ -11,7 +11,7 @@ interface DashboardPageProps {
 export default function DashboardPage({ user }: DashboardPageProps) {
   const navigate = useNavigate();
   const [courses, setCourses] = useState<any[]>([]);
-  const [profile, setProfile] = useState<any>(null); // <-- Nuevo estado para el perfil
+  const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -19,7 +19,6 @@ export default function DashboardPage({ user }: DashboardPageProps) {
       try {
         if (!user?.id) return;
         
-        // Ejecutamos ambas consultas en paralelo para mayor velocidad
         const [coursesData, userProfile] = await Promise.all([
           listCourses({ usuarioId: user.id, soloActivos: true }),
           getUserProfile(user.id)
@@ -127,7 +126,6 @@ export default function DashboardPage({ user }: DashboardPageProps) {
                     transition={{ delay: i * 0.1 }}
                     className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden hover:shadow-xl transition-all group"
                   >
-                    {/* Sustitución del gradiente por la miniatura real */}
                     <div className="h-32 bg-slate-100 relative">
                       <img 
                         src={course.thumbnail || `https://picsum.photos/seed/${course.id}/600/300`} 
@@ -188,7 +186,6 @@ export default function DashboardPage({ user }: DashboardPageProps) {
                     whileHover={{ y: -5 }}
                     className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex gap-4 items-center"
                   >
-                    {/* Sustitución del gradiente pequeño por la miniatura */}
                     <div className="w-20 h-20 rounded-2xl overflow-hidden bg-slate-100 flex-shrink-0">
                       <img 
                         src={course.thumbnail || `https://picsum.photos/seed/${course.id}/200/200`} 

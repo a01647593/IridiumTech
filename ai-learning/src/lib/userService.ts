@@ -1,4 +1,4 @@
-import { supabase } from './supabaseClient'; // Asegúrate de que esta ruta sea correcta
+import { supabase } from './supabaseClient';
 
 export interface TeamUser {
   id: string;
@@ -47,7 +47,6 @@ export async function fetchAllUsers(): Promise<TeamUser[]> {
 }
 
 export async function updateUserRole(userId: string, rolNombre: string) {
-  // 1. Buscar el ID del rol en la tabla 'roles'
   const { data: rol } = await supabase
     .from('roles')
     .select('id')
@@ -56,7 +55,6 @@ export async function updateUserRole(userId: string, rolNombre: string) {
 
   if (!rol) throw new Error('Rol no encontrado');
 
-  // 2. Eliminamos cualquier rol anterior que tuviera el usuario
   const { error: deleteError } = await supabase
     .from('user_roles')
     .delete()
@@ -64,7 +62,6 @@ export async function updateUserRole(userId: string, rolNombre: string) {
 
   if (deleteError) throw new Error(`Error borrando rol anterior: ${deleteError.message}`);
 
-  // 3. Insertamos el nuevo rol de forma limpia
   const { error: insertError } = await supabase
     .from('user_roles')
     .insert({ user_id: userId, role_id: rol.id });
@@ -103,7 +100,6 @@ export async function updateStreak(userId: string) {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 
-  // 1. Obtener la racha actual
   const { data: streakData, error } = await supabase
     .from('streaks')
     .select('*')
@@ -113,7 +109,6 @@ export async function updateStreak(userId: string) {
   if (error) return;
 
   if (!streakData) {
-    // Si no existe el registro, lo creamos empezando en 1
     await supabase.from('streaks').insert({
       user_id: userId,
       current_streak: 1,

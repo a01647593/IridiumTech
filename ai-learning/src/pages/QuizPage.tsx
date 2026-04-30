@@ -54,18 +54,15 @@ export default function QuizPage({ user }: { user: any }) {
 
     async function initializeQuiz() {
       try {
-        // 1. Cargar quiz
         const data = await getQuizByLesson(lessonId!);
         if (!data) throw new Error('No existe quiz para esta lección');
 
         setLeccion(data.leccion);
         setQuestions(data.preguntas);
 
-        // 2. Crear intento
         const attempt = await createAttempt(user.id, lessonId!, data.quizId);
         setAttemptId(attempt.id);
 
-        // 3. Obtener courseId para saber la lección siguiente
         const { data: lessonRow } = await supabase
           .from('lessons')
           .select('course_id')
@@ -91,7 +88,7 @@ export default function QuizPage({ user }: { user: any }) {
     }
 
     initializeQuiz();
-  }, [lessonId, user]); // ✅ courseId eliminado — ya no existe como variable
+  }, [lessonId, user]);
 
   const currentQuestion = questions[currentQuestionIndex];
   const progress = questions.length > 0

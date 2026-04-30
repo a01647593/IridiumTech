@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-// 1. Cambiamos la importación para usar nuestro nuevo servicio
 import { fetchAllUsers, updateUserRole, type TeamUser, updateUserDetails} from '../lib/userService';
 
 type UserFilter = 'all' | 'admins' | 'inactive';
 
-// Opcional: Recibir el usuario actual como prop (como en DashboardPage) para mayor seguridad
 export default function UserManagementPage({ currentUser }: { currentUser?: any }) {
   const [users, setUsers] = useState<TeamUser[]>([]);
   const [currentUserRole, setCurrentUserRole] = useState<TeamUser['role']>('user');
@@ -23,11 +21,9 @@ export default function UserManagementPage({ currentUser }: { currentUser?: any 
     status: 'Activo',
   });
 
-  // 2. Cargamos los usuarios desde Supabase al montar el componente
   useEffect(() => {
     loadUsers();
     
-    // Determinamos el rol del usuario que está viendo la página
     if (currentUser?.role) {
       setCurrentUserRole(currentUser.role);
     } else {
@@ -72,15 +68,11 @@ export default function UserManagementPage({ currentUser }: { currentUser?: any 
     setShowUserModal(true);
   };
 
-  // 3. Modificamos el guardado para interactuar con Supabase
-  // UserManagementPage.tsx
-
   const handleSaveUser = async () => {
     if (!formUser.name.trim() || !formUser.email.trim()) return;
   
     try {
       if (editingUser) {
-        // 1. Actualizar datos básicos (Nombre, Email, Área, Estado)
         await updateUserDetails(editingUser.id, {
           name: formUser.name,
           email: formUser.email,
@@ -88,7 +80,6 @@ export default function UserManagementPage({ currentUser }: { currentUser?: any 
           status: formUser.status
         });
   
-        // 2. Actualizar el rol solo si cambió
         if (editingUser.role !== formUser.role) {
           await updateUserRole(editingUser.id, formUser.role);
         }
@@ -96,7 +87,6 @@ export default function UserManagementPage({ currentUser }: { currentUser?: any 
         alert('Usuario actualizado con éxito');
         await loadUsers();
       } else {
-        // Lógica de invitación...
         alert('Función de invitación pendiente de implementar con Auth.');
       }
       setShowUserModal(false);
