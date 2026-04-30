@@ -19,8 +19,44 @@ const sanitizeEnvValue = (value: unknown) => {
 const geminiApiKey =
   sanitizeEnvValue((import.meta as { env?: Record<string, string> }).env?.VITE_GEMINI_API_KEY) ||
   '';
+const geminiModel =
+  sanitizeEnvValue((import.meta as { env?: Record<string, string> }).env?.VITE_GEMINI_MODEL) ||
+  'gemini-2.5-flash';
+
+const geminiModelFallbacks = [geminiModel, 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
 
 const ai = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
+
+async function generateAssistantReply(history: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>) {
+  if (!ai) {
+    throw new Error('Falta configurar la API key de Gemini.');
+  }
+
+  const uniqueModels = Array.from(new Set(geminiModelFallbacks.filter(Boolean)));
+  let lastError: unknown = null;
+
+  for (const model of uniqueModels) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: history,
+        config: {
+          systemInstruction: 'Eres el asistente virtual de soporte para la nueva Plataforma Adaptativa de Whirlpool. Tu ÚNICA función es ayudar a los usuarios a navegar por esta plataforma, usar sus funciones y entender su interfaz. Tu ÚNICA fuente de verdad es el texto proporcionado bajo la etiqueta [CONTEXTO DE LA PLATAFORMA]. Si el usuario pregunta algo que no está en ese contexto (incluso si es sobre electrodomésticos Whirlpool, reparaciones, o temas externos), tienes estrictamente prohibido inventar o adivinar. Responde siempre: Lo siento, solo puedo ayudarte con dudas sobre el uso y las funciones de esta plataforma adaptativa.'
+        }
+      });
+
+      return response.text?.trim() || 'Lo siento, no pude procesar tu solicitud en este momento.';
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      if (!/503|UNAVAILABLE|high demand/i.test(message)) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('No se pudo contactar con Gemini en este momento.');
+}
 
 export default function AIAssistantPage() {
   const [messages, setMessages] = useState<Message[]>([
@@ -92,41 +128,7 @@ export default function AIAssistantPage() {
         parts: [{ text: input }]
       });
 
-      let stream;
-      try {
-        stream = await ai.models.generateContentStream({
-          model: 'gemini-3-flash-preview',
-          contents: history,
-          config: {
-            systemInstruction: "Eres el asistente virtual de soporte para la nueva Plataforma Adaptativa de Whirlpool. Tu ÚNICA función es ayudar a los usuarios a navegar por esta plataforma, usar sus funciones y entender su interfaz. Tu ÚNICA fuente de verdad es el texto proporcionado bajo la etiqueta [CONTEXTO DE LA PLATAFORMA]. Si el usuario pregunta algo que no está en ese contexto (incluso si es sobre electrodomésticos Whirlpool, reparaciones, o temas externos), tienes estrictamente prohibido inventar o adivinar. Responde siempre: Lo siento, solo puedo ayudarte con dudas sobre el uso y las funciones de esta plataforma adaptativa.",
-          }
-        });
-      } catch (streamError) {
-        throw streamError;
-      }
-
-      let streamedText = '';
-
-      for await (const chunk of stream) {
-        const chunkText = chunk.text ?? '';
-        if (!chunkText) {
-          continue;
-        }
-
-        streamedText += chunkText;
-        setMessages((prev) =>
-          prev.map((message) =>
-            message.id === assistantMessageId
-              ? {
-                  ...message,
-                  content: streamedText
-                }
-              : message
-          )
-        );
-      }
-
-      const finalText = streamedText.trim() || "Lo siento, no pude procesar tu solicitud en este momento.";
+      const finalText = await generateAssistantReply(history);
       setMessages((prev) =>
         prev.map((message) =>
           message.id === assistantMessageId
