@@ -28,6 +28,43 @@ export default function ContentManagementPage() {
   });
   const [uploadingPdf, setUploadingPdf] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [uploadingMasivo, setUploadingMasivo] = useState(false);
+  const [archivosMasivos, setArchivosMasivos] = useState<{name: string, url: string}[]>([]);
+
+  const handleMasivoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    setUploadingMasivo(true);
+    const resultados: {name: string, url: string}[] = [];
+
+    try {
+      for (const file of files) {
+        const path = `pdfs/${Date.now()}-${file.name}`;
+        const { data, error } = await supabase.storage
+          .from('course-content')
+          .upload(path, file, { upsert: true, contentType: file.type });
+
+        if (error) {
+          console.error(`Error subiendo ${file.name}:`, error.message);
+          continue;
+        }
+
+        const { data: urlData } = supabase.storage
+          .from('course-content')
+          .getPublicUrl(data.path);
+
+        resultados.push({ name: file.name, url: urlData.publicUrl });
+      }
+
+      setArchivosMasivos(prev => [...prev, ...resultados]);
+      alert(`${resultados.length} archivo(s) subidos correctamente.`);
+    } catch (err) {
+      alert('Error al subir archivos.');
+    } finally {
+      setUploadingMasivo(false);
+    }
+  };
 
   const uploadToStorage = async (file: File, type: 'pdf' | 'video') => {
     const path = `${type}s/${Date.now()}-${file.name}`;
@@ -351,9 +388,22 @@ export default function ContentManagementPage() {
           <p className="text-slate-500 font-medium">GIT Labs Central: Crea y administra recursos de aprendizaje.</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-          <button className="px-6 py-3 bg-white border border-slate-200 text-on-surface font-bold rounded-2xl hover:bg-slate-50 transition-all flex items-center justify-center gap-2">
-            <span className="material-symbols-outlined">upload_file</span> <span className="whitespace-nowrap">Cargar Masivo</span>
-          </button>
+          <label className={`px-6 py-3 bg-white border border-slate-200 text-on-surface font-bold rounded-2xl hover:bg-slate-50 transition-all flex items-center justify-center gap-2 cursor-pointer ${uploadingMasivo ? 'opacity-50 cursor-not-allowed' : ''}`}>
+          <span className="material-symbols-outlined">
+            {uploadingMasivo ? 'progress_activity' : 'upload_file'}
+          </span>
+          <span className="whitespace-nowrap">
+            {uploadingMasivo ? 'Subiendo...' : 'Cargar Masivo'}
+          </span>
+          <input
+            type="file"
+            accept=".pdf"
+            multiple
+            className="hidden"
+            disabled={uploadingMasivo}
+            onChange={handleMasivoUpload}
+          />
+        </label>
           <button 
             onClick={() => setShowGemaModal(true)}
             className="px-6 py-3 bg-white border border-primary text-primary font-bold rounded-2xl hover:bg-primary/5 transition-all flex items-center justify-center gap-2"
@@ -861,6 +911,24 @@ export default function ContentManagementPage() {
                           />
                         </label>
                       </div>
+                      {archivosMasivos.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Archivos disponibles</p>
+                        <div className="max-h-32 overflow-y-auto space-y-1">
+                          {archivosMasivos.map((archivo, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => setModuleDraft(curr => ({ ...curr, pdfUrl: archivo.url }))}
+                              className="w-full text-left px-3 py-2 rounded-lg bg-slate-50 hover:bg-primary/10 text-xs font-medium text-slate-600 hover:text-primary transition-all truncate"
+                            >
+                              <span className="material-symbols-outlined text-sm align-middle mr-1">picture_as_pdf</span>
+                              {archivo.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     </div>
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Video (opcional)</label>
