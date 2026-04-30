@@ -1,0 +1,8 @@
+{
+  "buildCommand": "cd ai-learning && npm install && npm run build",
+  "outputDirectory": "ai-learning/dist",
+  "installCommand": "npm install",
+  "env": {
+    "NODE_ENV": "production"
+  }
+}

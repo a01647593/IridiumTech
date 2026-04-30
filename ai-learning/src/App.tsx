@@ -15,7 +15,7 @@ import KnowledgeBasePage from './pages/KnowledgeBasePage';
 import LeaderboardPage from './pages/LeaderboardPage';
 import LessonPage from './pages/LessonPage';
 import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
+import RegisterPage from './pages/Registerpage';
 import ProfilePage from './pages/ProfilePage';
 import PromptDetailPage from './pages/PromptDetailPage';
 import PromptLibraryPage from './pages/PromptLibraryPage';
