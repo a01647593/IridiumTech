@@ -41,6 +41,7 @@ const buildFallbackUser = (params: {
     lastActivityDate: undefined,
     completedQuizzesCount: 0,
     savedPrompts: [],
+    needsOnboarding: true,
   };
 };
 
@@ -180,6 +181,7 @@ export async function getUserProfile(userId: string): Promise<User | null> {
       lastActivityDate: undefined,
       completedQuizzesCount,
       savedPrompts: [],
+      needsOnboarding: !dbUser.departments || !dbUser.nombre,
     };
 
     return profile;

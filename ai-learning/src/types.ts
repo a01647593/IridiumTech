@@ -32,6 +32,7 @@ export interface User {
   lastActivityDate?: string;
   completedQuizzesCount: number;
   savedPrompts: string[];
+  needsOnboarding?: boolean;
 }
 
 export interface QuizQuestion {
