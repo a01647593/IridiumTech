@@ -23,6 +23,7 @@ export default function ContentManagementPage() {
     title: '',
     duration: '45m',
     pdfUrl: '',
+    pdfFile: null as File | null,
     videoUrl: '',
     addQuiz: true,
   });
@@ -147,6 +148,7 @@ export default function ContentManagementPage() {
         title: '',
         duration: '45m',
         pdfUrl: '',
+        pdfFile: null,
         videoUrl: '',
         addQuiz: true,
       });
@@ -806,15 +808,41 @@ export default function ContentManagementPage() {
                       </label>
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">URL PDF (opcional)</label>
-                      <input
-                        type="text"
-                        value={moduleDraft.pdfUrl}
-                        onChange={(event) => setModuleDraft((current) => ({ ...current, pdfUrl: event.target.value }))}
-                        className="w-full h-12 px-4 bg-slate-50 rounded-xl"
-                        placeholder="https://...pdf"
-                      />
-                    </div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          Material PDF (Sube un archivo O pega una URL)
+                        </label>
+                        <div className="flex gap-2">
+                          {/* Opción 1: Subir Archivo */}
+                          <label className="flex items-center justify-center px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl cursor-pointer transition-colors text-sm font-bold">
+                            <span className="material-symbols-outlined mr-2 text-sm">upload_file</span>
+                            {moduleDraft.pdfFile ? 'Archivo seleccionado' : 'Subir Local'}
+                            <input
+                              type="file"
+                              accept="application/pdf"
+                              className="hidden"
+                              onChange={(event) => {
+                                const file = event.target.files?.[0] || null;
+                                setModuleDraft((current) => ({ ...current, pdfFile: file, pdfUrl: '' }));
+                              }}
+                            />
+                          </label>
+
+                          {/* Opción 2: Pegar URL */}
+                          <input
+                            type="text"
+                            value={moduleDraft.pdfUrl}
+                            disabled={!!moduleDraft.pdfFile}
+                            onChange={(event) => setModuleDraft((current) => ({ ...current, pdfUrl: event.target.value }))}
+                            className="flex-1 h-12 px-4 bg-slate-50 rounded-xl disabled:opacity-50"
+                            placeholder="https://... o usa el botón de subir"
+                          />
+                        </div>
+                        {moduleDraft.pdfFile && (
+                          <p className="text-xs text-primary font-bold mt-1">
+                            Archivo listo para subir: {moduleDraft.pdfFile.name}
+                          </p>
+                        )}
+                      </div>
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">URL Video (opcional)</label>
                       <input
