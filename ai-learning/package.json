@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "rm -rf node_modules package-lock.json && npm install --force && vite build",
+    "build": "rm -rf package-lock.json node_modules && npm install --force && vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
