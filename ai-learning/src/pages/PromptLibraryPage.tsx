@@ -1,118 +1,54 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
-import { MOCK_PROMPTS } from '../constants';
-import type { Prompt } from '../types';
+import { fetchGems, createGem, type AiGem } from '../lib/gemService';
+import { fetchDepartments, type Department } from '../lib/departmentService';
+import type { User } from '../types';
 
-interface PromptMetrics {
-  likes: number;
-  likedByMe: boolean;
-  views: number;
-}
-
-type PromptCard = Prompt & { likedByMe: boolean };
-
-const getMetricsKey = (promptId: string) => `prompt_metrics_${promptId}`;
-
-const applyStoredMetrics = <T extends PromptCard>(prompt: T): T => {
-  const rawMetrics = localStorage.getItem(getMetricsKey(prompt.id));
-  if (!rawMetrics) {
-    return prompt;
-  }
-
-  try {
-    const metrics = JSON.parse(rawMetrics) as Partial<PromptMetrics>;
-    return {
-      ...prompt,
-      likes: typeof metrics.likes === 'number' ? metrics.likes : prompt.likes,
-      usageCount: typeof metrics.views === 'number' ? metrics.views : prompt.usageCount,
-      likedByMe: typeof metrics.likedByMe === 'boolean' ? metrics.likedByMe : Boolean(prompt.likedByMe),
-    };
-  } catch {
-    return prompt;
-  }
-};
-
-export default function PromptLibraryPage() {
+export default function PromptLibraryPage({ user }: { user: User }) {
   const navigate = useNavigate();
-  const [prompts, setPrompts] = useState<PromptCard[]>(
-    MOCK_PROMPTS.map((p) => applyStoredMetrics({ ...p, likedByMe: false })),
-  );
+
+  const [gems, setGems] = useState<AiGem[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedDeptId, setSelectedDeptId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('Todas');
-  const [showShareModal, setShowShareModal] = useState(false);
-  const [newGema, setNewGema] = useState<{
-    title: string;
-    description: string;
-    category: Prompt['category'];
-    tags: string;
-  }>({ title: '', description: '', category: 'Productividad', tags: '' });
-
-  const categories = ['Todas', 'Productividad', 'Ingeniería', 'Marketing', 'Finanzas', 'HR'];
-
-  const filteredPrompts = prompts.filter(p => {
-    const matchesSearch = p.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         p.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'Todas' || p.category === selectedCategory;
-    return matchesSearch && matchesCategory;
+  const [showModal, setShowModal] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [draft, setDraft] = useState({
+    title: '',
+    description: '',
+    prompt: '',
+    department_id: null as number | null,
   });
 
-  const handleLike = (id: string) => {
-    setPrompts((prev) =>
-      prev.map((p) => {
-        if (p.id !== id) {
-          return p;
-        }
-
-        const isLiked = !p.likedByMe;
-        const updatedPrompt = {
-          ...p,
-          likedByMe: isLiked,
-          likes: isLiked ? p.likes + 1 : Math.max(p.likes - 1, 0),
-        };
-
-        localStorage.setItem(
-          getMetricsKey(p.id),
-          JSON.stringify({
-            likes: updatedPrompt.likes,
-            likedByMe: updatedPrompt.likedByMe,
-            views: updatedPrompt.usageCount,
-          }),
-        );
-
-        return updatedPrompt;
-      }),
-    );
-  };
-
   useEffect(() => {
-    setPrompts((prev) => prev.map((p) => applyStoredMetrics(p)));
+    Promise.all([fetchGems(), fetchDepartments()]).then(([gemsData, deptsData]) => {
+      setGems(gemsData);
+      setDepartments(deptsData);
+      setLoading(false);
+    });
   }, []);
 
-  const handleShare = () => {
-    if (newGema.title && newGema.description) {
-      const gema: PromptCard = {
-        id: Date.now().toString(),
-        title: newGema.title,
-        description: newGema.description,
-        content: newGema.description,
-        author: 'Usuario',
-        area: 'Productividad',
-        category: newGema.category,
-        tags: newGema.tags.split(',').map(t => t.trim()),
-        likes: 0,
-        usageCount: 0,
-        impact: 'Nuevo',
-        likedByMe: false,
-      };
-      localStorage.setItem(
-        getMetricsKey(gema.id),
-        JSON.stringify({ likes: gema.likes, likedByMe: false, views: gema.usageCount }),
-      );
-      setPrompts([gema, ...prompts]);
-      setShowShareModal(false);
-      setNewGema({ title: '', description: '', category: 'Productividad', tags: '' });
+  const filtered = gems.filter((g) => {
+    const matchesDept = selectedDeptId === null || g.department_id === selectedDeptId;
+    const matchesSearch =
+      !searchTerm ||
+      g.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (g.description ?? '').toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesDept && matchesSearch;
+  });
+
+  const handleCreate = async () => {
+    if (!draft.title.trim() || !draft.prompt.trim()) return;
+    setSaving(true);
+    const gem = await createGem(user.id, draft);
+    if (gem) {
+      setGems((prev) => [gem, ...prev]);
+      setShowModal(false);
+      setDraft({ title: '', description: '', prompt: '', department_id: null });
     }
+    setSaving(false);
   };
 
   return (
@@ -121,126 +57,119 @@ export default function PromptLibraryPage() {
         <div className="max-w-2xl">
           <h1 className="text-3xl font-black text-primary tracking-tight">Biblioteca de Gemas</h1>
           <p className="text-slate-500 font-medium mt-2">
-            Repositorio corporativo de prompts y mejores prácticas validadas por GIT Labs para maximizar tu productividad.
+            Repositorio corporativo de prompts validados por GIT Labs. Encuentra, comparte y usa las mejores gemas de IA.
           </p>
         </div>
-        <button 
-          onClick={() => setShowShareModal(true)}
-          className="px-6 py-3 bg-primary text-white rounded-2xl font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-all flex items-center gap-2"
+        <button
+          onClick={() => setShowModal(true)}
+          className="px-6 py-3 bg-primary text-white rounded-2xl font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-all flex items-center gap-2 whitespace-nowrap"
         >
           <span className="material-symbols-outlined">add</span> Compartir Gema
         </button>
       </header>
 
-      {/* Search and Filters */}
       <div className="flex flex-col md:flex-row gap-4">
         <div className="flex-1 relative">
           <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">search</span>
-          <input 
-            type="text" 
-            placeholder="Buscar por título, descripción o tecnología..."
+          <input
+            type="text"
+            placeholder="Buscar por título o descripción..."
             className="w-full h-14 pl-12 pr-6 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-primary focus:border-transparent transition-all font-medium"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 md:pb-0">
-          {categories.map(cat => (
-            <button 
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-6 h-14 rounded-2xl font-bold text-sm whitespace-nowrap transition-all ${
-                selectedCategory === cat 
-                ? 'bg-primary text-white shadow-lg shadow-primary/20' 
+          <button
+            onClick={() => setSelectedDeptId(null)}
+            className={`px-6 h-14 rounded-2xl font-bold text-sm whitespace-nowrap transition-all ${
+              selectedDeptId === null
+                ? 'bg-primary text-white shadow-lg shadow-primary/20'
                 : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'
+            }`}
+          >
+            Todas
+          </button>
+          {departments.map((dept) => (
+            <button
+              key={dept.id}
+              onClick={() => setSelectedDeptId(dept.id)}
+              className={`px-6 h-14 rounded-2xl font-bold text-sm whitespace-nowrap transition-all ${
+                selectedDeptId === dept.id
+                  ? 'bg-primary text-white shadow-lg shadow-primary/20'
+                  : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'
               }`}
             >
-              {cat}
+              {dept.name}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Prompts Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredPrompts.map((prompt, i) => (
-          <motion.div 
-            key={prompt.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05 }}
-            className="bg-white rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group overflow-hidden flex flex-col"
-          >
-            <div className="p-8 flex-1">
-              <div className="flex justify-between items-start mb-6">
-                <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
-                  <span className="material-symbols-outlined">smart_toy</span>
-                </div>
-                <div className="flex gap-2">
+      {loading ? (
+        <div className="py-20 text-center text-slate-500 font-medium">Cargando gemas...</div>
+      ) : filtered.length === 0 ? (
+        <div className="py-20 text-center">
+          <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <span className="material-symbols-outlined text-slate-300 text-4xl">search_off</span>
+          </div>
+          <h3 className="text-xl font-bold text-slate-400">No hay gemas que coincidan</h3>
+          <p className="text-slate-400 mt-2">Prueba con otros filtros o sé el primero en compartir una.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filtered.map((gem, i) => (
+            <motion.div
+              key={gem.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.04 }}
+              className="bg-white rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group overflow-hidden flex flex-col cursor-pointer"
+              onClick={() => navigate(`/prompts/${gem.id}`)}
+            >
+              <div className="p-8 flex-1">
+                <div className="flex justify-between items-start mb-6">
+                  <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
+                    <span className="material-symbols-outlined">auto_awesome</span>
+                  </div>
                   <span className="px-3 py-1 bg-slate-100 text-slate-500 text-[10px] font-black uppercase tracking-widest rounded-lg">
-                    {prompt.category}
+                    {gem.department_name}
                   </span>
                 </div>
-              </div>
-              <h3 className="text-xl font-bold text-on-surface mb-3 group-hover:text-primary transition-colors">{prompt.title}</h3>
-              <p className="text-sm text-slate-500 leading-relaxed line-clamp-3 mb-6">{prompt.description}</p>
-              
-              <div className="flex flex-wrap gap-2 mb-6">
-                {prompt.tags.map(tag => (
-                  <span key={tag} className="text-[10px] font-bold text-primary bg-primary/5 px-2 py-1 rounded-md">#{tag}</span>
-                ))}
-              </div>
-
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Impacto Reportado</p>
-                <p className="text-xs font-bold text-green-600 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-sm">trending_up</span>
-                  {prompt.impact}
+                <h3 className="text-xl font-bold text-on-surface mb-3 group-hover:text-primary transition-colors line-clamp-2">
+                  {gem.title}
+                </h3>
+                <p className="text-sm text-slate-500 leading-relaxed line-clamp-3">
+                  {gem.description || 'Sin descripción.'}
                 </p>
               </div>
-            </div>
-            
-            <div className="px-8 py-5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
-        <button 
-          onClick={() => handleLike(prompt.id)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all duration-300 ${
-            prompt.likedByMe 
-            ? 'bg-red-50 text-red-500 shadow-sm' 
-            : 'text-slate-400 hover:bg-slate-100 hover:text-red-500'
-          }`}
-        >
-          <span className={`material-symbols-outlined text-lg ${prompt.likedByMe ? 'material-symbols-fill' : ''}`}>favorite</span>
-          <span className="text-xs font-bold">{prompt.likes}</span>
-        </button>
-                <div className="flex items-center gap-1 text-slate-400">
-                  <span className="material-symbols-outlined text-sm">visibility</span>
-                  <span className="text-xs font-bold">{prompt.usageCount}</span>
+
+              <div className="px-8 py-5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-1.5 text-slate-400">
+                  <span className="material-symbols-outlined text-sm">play_circle</span>
+                  <span className="text-xs font-bold">{gem.uses_count} usos</span>
+                </div>
+                <div className="flex items-center gap-1 text-slate-400 text-xs font-bold">
+                  <span className="material-symbols-outlined text-sm">person</span>
+                  {gem.author_name}
                 </div>
               </div>
-              <button
-                onClick={() => navigate(`/prompts/${prompt.id}`, { state: { prompt } })}
-                className="text-primary font-bold text-sm flex items-center gap-1 hover:underline whitespace-nowrap"
-              >
-                Ver Gema <span className="material-symbols-outlined text-sm">arrow_forward</span>
-              </button>
-            </div>
-          </motion.div>
-        ))}
-      </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
 
-      {/* Share Modal */}
       <AnimatePresence>
-        {showShareModal && (
+        {showModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setShowShareModal(false)}
+              onClick={() => setShowModal(false)}
               className="absolute inset-0 bg-on-surface/40 backdrop-blur-sm"
             />
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -248,76 +177,73 @@ export default function PromptLibraryPage() {
             >
               <div className="p-8 border-b border-slate-50 flex justify-between items-center">
                 <h2 className="text-2xl font-black text-on-surface">Compartir Nueva Gema</h2>
-                <button onClick={() => setShowShareModal(false)} className="text-slate-400 hover:text-primary transition-colors">
+                <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-primary transition-colors">
                   <span className="material-symbols-outlined">close</span>
                 </button>
               </div>
-              <div className="p-8 space-y-6">
+              <div className="p-8 space-y-5">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Título de la Gema</label>
-                  <input 
-                    type="text" 
-                    value={newGema.title}
-                    onChange={(e) => setNewGema({ ...newGema, title: e.target.value })}
-                    className="w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium" 
-                    placeholder="Ej. Optimizador de Consultas SQL" 
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Título *</label>
+                  <input
+                    type="text"
+                    value={draft.title}
+                    onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+                    className="w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium"
+                    placeholder="Ej. Optimizador de reportes de ingeniería"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Categoría</label>
-                    <select 
-                      value={newGema.category}
-                      onChange={(e) => setNewGema({ ...newGema, category: e.target.value as Prompt['category'] })}
-                      className="w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium"
-                    >
-                      {categories.filter(c => c !== 'Todas').map(c => <option key={c}>{c}</option>)}
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tags (separados por coma)</label>
-                    <input 
-                      type="text" 
-                      value={newGema.tags}
-                      onChange={(e) => setNewGema({ ...newGema, tags: e.target.value })}
-                      className="w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium" 
-                      placeholder="IA, SQL, Datos" 
-                    />
-                  </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Departamento</label>
+                  <select
+                    value={draft.department_id ?? ''}
+                    onChange={(e) => setDraft({ ...draft, department_id: e.target.value ? Number(e.target.value) : null })}
+                    className="w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium"
+                  >
+                    <option value="">General</option>
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Descripción / Prompt</label>
-                  <textarea 
-                    value={newGema.description}
-                    onChange={(e) => setNewGema({ ...newGema, description: e.target.value })}
-                    className="w-full p-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium h-32 resize-none" 
-                    placeholder="Describe cómo usar esta gema y el prompt principal..."
-                  ></textarea>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Descripción</label>
+                  <input
+                    type="text"
+                    value={draft.description}
+                    onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+                    className="w-full h-12 px-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium"
+                    placeholder="¿Para qué sirve esta gema?"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Prompt *</label>
+                  <textarea
+                    value={draft.prompt}
+                    onChange={(e) => setDraft({ ...draft, prompt: e.target.value })}
+                    className="w-full p-4 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium h-36 resize-none"
+                    placeholder="Escribe el prompt completo aquí..."
+                  />
                 </div>
               </div>
               <div className="p-8 bg-slate-50 flex justify-end gap-4">
-                <button onClick={() => setShowShareModal(false)} className="px-6 py-3 font-bold text-slate-500 hover:text-on-surface transition-colors">Cancelar</button>
-                <button 
-                  onClick={handleShare}
-                  className="px-8 py-3 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/20 hover:scale-105 transition-all"
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="px-6 py-3 font-bold text-slate-500 hover:text-on-surface transition-colors"
                 >
-                  Publicar Gema
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleCreate}
+                  disabled={saving || !draft.title.trim() || !draft.prompt.trim()}
+                  className="px-8 py-3 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/20 hover:scale-105 transition-all disabled:opacity-50 disabled:scale-100"
+                >
+                  {saving ? 'Publicando...' : 'Publicar Gema'}
                 </button>
               </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
-
-      {filteredPrompts.length === 0 && (
-        <div className="py-20 text-center">
-          <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <span className="material-symbols-outlined text-slate-300 text-4xl">search_off</span>
-          </div>
-          <h3 className="text-xl font-bold text-slate-400">No encontramos gemas que coincidan</h3>
-          <p className="text-slate-400 mt-2">Prueba con otros términos o categorías.</p>
-        </div>
-      )}
     </div>
   );
 }
