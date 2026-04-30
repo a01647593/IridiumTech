@@ -258,12 +258,33 @@ export async function addLessonDB(courseId: string, moduleDraft: any) {
 
   if (error) throw error;
 
-  if (moduleDraft.pdfUrl?.trim()) {
+  let finalPdfUrl = moduleDraft.pdfUrl?.trim();
+
+  if (moduleDraft.pdfFile) {
+    const file = moduleDraft.pdfFile;
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+    const filePath = `modulos/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('course-content')
+      .upload(filePath, file);
+
+    if (uploadError) throw uploadError;
+
+    const { data: publicUrlData } = supabase.storage
+      .from('course-content')
+      .getPublicUrl(filePath);
+
+    finalPdfUrl = publicUrlData.publicUrl;
+  }
+
+  if (finalPdfUrl) {
     const { error: pdfError } = await supabase.from('content').insert({
       lesson_id: lesson.id,
       type: 'pdf',
-      title: 'Material PDF',
-      external_url: moduleDraft.pdfUrl.trim(),
+      title: moduleDraft.pdfFile ? moduleDraft.pdfFile.name : 'Material PDF',
+      external_url: finalPdfUrl,
     });
 
     if (pdfError) throw pdfError;
