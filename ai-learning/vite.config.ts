@@ -75,8 +75,17 @@ export default defineConfig(({ mode }) => {
         },
       },
     ],
-    define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+            'ui-vendor': ['motion', 'recharts', 'lucide-react'],
+            'supabase': ['@supabase/supabase-js', '@supabase/ssr'],
+          },
+        },
+      },
+      chunkSizeWarningLimit: 600,
     },
     resolve: {
       alias: {
