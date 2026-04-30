@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { GoogleGenAI } from '@google/genai';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { supabase } from '../lib/supabaseClient';
+import { sendChatMessage, disconnectChat } from '../lib/chatSocketService';
 import ThinkingIndicator from '../components/ThinkingIndicator';
 
 interface Message {
@@ -17,48 +18,6 @@ const sanitizeEnvValue = (value: unknown) => {
   return value.trim().replace(/^['"]|['"]$/g, '');
 };
 
-const geminiApiKey =
-  sanitizeEnvValue((import.meta as { env?: Record<string, string> }).env?.VITE_GEMINI_API_KEY) ||
-  '';
-const geminiModel =
-  sanitizeEnvValue((import.meta as { env?: Record<string, string> }).env?.VITE_GEMINI_MODEL) ||
-  'gemini-2.5-flash';
-
-const geminiModelFallbacks = [geminiModel, 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
-
-const ai = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
-
-async function generateAssistantReply(history: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>) {
-  if (!ai) {
-    throw new Error('Falta configurar la API key de Gemini.');
-  }
-
-  const uniqueModels = Array.from(new Set(geminiModelFallbacks.filter(Boolean)));
-  let lastError: unknown = null;
-
-  for (const model of uniqueModels) {
-    try {
-      const response = await ai.models.generateContent({
-        model,
-        contents: history,
-        config: {
-          systemInstruction: 'Eres el asistente virtual de soporte para la nueva Plataforma Adaptativa de Whirlpool. Tu ÚNICA función es ayudar a los usuarios a navegar por esta plataforma, usar sus funciones y entender su interfaz. Tu ÚNICA fuente de verdad es el texto proporcionado bajo la etiqueta [CONTEXTO DE LA PLATAFORMA]. Si el usuario pregunta algo que no está en ese contexto (incluso si es sobre electrodomésticos Whirlpool, reparaciones, o temas externos), tienes estrictamente prohibido inventar o adivinar. Responde siempre: Lo siento, solo puedo ayudarte con dudas sobre el uso y las funciones de esta plataforma adaptativa.'
-        }
-      });
-
-      return response.text?.trim() || 'Lo siento, no pude procesar tu solicitud en este momento.';
-    } catch (error) {
-      lastError = error;
-      const message = error instanceof Error ? error.message : String(error);
-      if (!/503|UNAVAILABLE|high demand/i.test(message)) {
-        throw error;
-      }
-    }
-  }
-
-  throw lastError instanceof Error ? lastError : new Error('No se pudo contactar con Gemini en este momento.');
-}
-
 export default function AIAssistantPage() {
   const location = useLocation();
   const initialPrompt = (location.state as { initialPrompt?: string } | null)?.initialPrompt ?? '';
@@ -67,17 +26,39 @@ export default function AIAssistantPage() {
     {
       id: '1',
       role: 'assistant',
-      content: 'Hola, soy la Gema de Ingeniería de Whirlpool. ¿En qué puedo ayudarte hoy con tus procesos o aprendizaje de IA?',
+      content: 'Hola, soy el bot de Ingeniería de Whirlpool. ¿En qué puedo ayudarte hoy con tus procesos o aprendizaje de IA?',
       timestamp: new Date()
     }
   ]);
   const [input, setInput] = useState(initialPrompt);
   const [isTyping, setIsTyping] = useState(false);
+  const [userToken, setUserToken] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  // Get user token from Supabase
+  useEffect(() => {
+    const fetchToken = async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (!error && data.session?.access_token) {
+          setUserToken(data.session.access_token);
+        }
+      } catch (err) {
+        console.error('Error fetching token:', err);
+      }
+    };
+
+    fetchToken();
+
+    // Cleanup on unmount
+    return () => {
+      disconnectChat();
+    };
+  }, []);
 
   useEffect(() => {
     scrollToBottom();
@@ -86,14 +67,14 @@ export default function AIAssistantPage() {
   const handleSend = async () => {
     if (!input.trim() || isTyping) return;
 
-    if (!ai) {
-      const missingKeyMessage: Message = {
+    if (!userToken) {
+      const errorMsg: Message = {
         id: Date.now().toString(),
         role: 'assistant',
-        content: 'Falta configurar la API key de Gemini. Agrega GEMINI_API_KEY o VITE_GEMINI_API_KEY en tu archivo .env y reinicia el servidor.',
+        content: 'Por favor, inicia sesión para usar el chat.',
         timestamp: new Date(),
       };
-      setMessages((prev) => [...prev, missingKeyMessage]);
+      setMessages((prev) => [...prev, errorMsg]);
       return;
     }
 
@@ -120,19 +101,8 @@ export default function AIAssistantPage() {
     setIsTyping(true);
 
     try {
-      // Prepare history for Gemini
-      const history = messages.map(msg => ({
-        role: msg.role === 'user' ? 'user' : 'model',
-        parts: [{ text: msg.content }]
-      }));
-
-      // Add current message
-      history.push({
-        role: 'user',
-        parts: [{ text: input }]
-      });
-
-      const finalText = await generateAssistantReply(history);
+      // Send message to backend via Socket.IO (RAG system)
+      const finalText = await sendChatMessage(input, userToken);
       setMessages((prev) =>
         prev.map((message) =>
           message.id === assistantMessageId
@@ -144,11 +114,11 @@ export default function AIAssistantPage() {
         )
       );
     } catch (error) {
-      console.error("Gemini API Error:", error);
+      console.error("Chat Error:", error);
       const errorMessage: Message = {
         id: assistantMessageId,
         role: 'assistant',
-        content: "Hubo un error al conectar con el servicio de IA. Por favor, intenta de nuevo más tarde.",
+        content: "Hubo un error al procesar tu mensaje. Por favor, intenta de nuevo.",
         timestamp: new Date()
       };
       setMessages((prev) =>
@@ -232,7 +202,7 @@ export default function AIAssistantPage() {
             </button>
             <textarea 
               className="flex-1 bg-transparent border-none focus:ring-0 text-slate-900 py-3 sm:py-4 px-2 resize-none h-12 sm:h-14 max-h-40 font-medium placeholder:text-slate-400 text-sm sm:text-base" 
-              placeholder="Pregúntale a la Gema de Ingeniería..."
+              placeholder="Pregúntale al bot de Ingeniería..."
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
