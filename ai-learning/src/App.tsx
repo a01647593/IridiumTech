@@ -17,8 +17,8 @@ import LessonPage from './pages/LessonPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
-import PromptDetailPage from './pages/PromptDetailPage';
-import PromptLibraryPage from './pages/PromptLibraryPage';
+//import PromptDetailPage from './pages/PromptDetailPage';
+//import PromptLibraryPage from './pages/PromptLibraryPage';
 import QuizPage from './pages/QuizPage';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
 import UserManagementPage from './pages/UserManagementPage';
@@ -200,8 +200,8 @@ function AppContent() {
               <Route path="/courses/:id" element={<CourseDetailPage user={user!} />} />
               <Route path="/lesson/:lessonId" element={<LessonPage user={user!} />} />
               <Route path="/quiz/:lessonId" element={<QuizPage user={user!} />} />
-              <Route path="/prompts" element={<PromptLibraryPage />} />
-              <Route path="/prompts/:id" element={<PromptDetailPage />} />
+              {/*<Route path="/prompts" element={<PromptLibraryPage />} />*/}
+              {/*<Route path="/prompts/:id" element={<PromptDetailPage />} />*/}
               <Route path="/leaderboard" element={<LeaderboardPage />} />
               <Route path="/assistant" element={<AIAssistantPage />} />
               <Route path="/help" element={<KnowledgeBasePage />} />
