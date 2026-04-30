@@ -181,7 +181,7 @@ export async function getUserProfile(userId: string): Promise<User | null> {
       lastActivityDate: undefined,
       completedQuizzesCount,
       savedPrompts: [],
-      needsOnboarding: !dbUser.departments || !dbUser.nombre,
+      needsOnboarding: !dbUser.departments,
     };
 
     return profile;
