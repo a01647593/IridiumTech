@@ -2,6 +2,12 @@
   "buildCommand": "cd ai-learning && npm install && npm run build",
   "outputDirectory": "ai-learning/dist",
   "installCommand": "npm install",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
   "env": {
     "NODE_ENV": "production"
   }
