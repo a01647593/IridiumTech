@@ -9,7 +9,7 @@
     "ingest:manuals": "tsx server/scripts/ingest.ts",
     "build:server": "tsc -p tsconfig.server.json",
     "build:client": "vite build",
-    "build": "npm run build:server && npm run build:client",
+    "build": "npm rebuild @tailwindcss/oxide && vite build",
     "preview": "vite preview",
     "start": "node dist/server/index.js"
   },
