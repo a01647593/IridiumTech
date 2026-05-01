@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { GoogleGenAI } from '@google/genai';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -59,6 +60,9 @@ async function generateAssistantReply(history: Array<{ role: 'user' | 'model'; p
 }
 
 export default function AIAssistantPage() {
+  const location = useLocation();
+  const initialPrompt = (location.state as { initialPrompt?: string } | null)?.initialPrompt ?? '';
+
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -67,7 +71,7 @@ export default function AIAssistantPage() {
       timestamp: new Date()
     }
   ]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState(initialPrompt);
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 

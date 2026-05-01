@@ -200,8 +200,8 @@ function AppContent() {
               <Route path="/courses/:id" element={<CourseDetailPage user={user!} />} />
               <Route path="/lesson/:lessonId" element={<LessonPage user={user!} />} />
               <Route path="/quiz/:lessonId" element={<QuizPage user={user!} />} />
-              <Route path="/prompts" element={<PromptLibraryPage />} />
-              <Route path="/prompts/:id" element={<PromptDetailPage />} />
+              <Route path="/prompts" element={<PromptLibraryPage user={user!} />} />
+              <Route path="/prompts/:id" element={<PromptDetailPage user={user!} />} />
               <Route path="/leaderboard" element={<LeaderboardPage />} />
               <Route path="/assistant" element={<AIAssistantPage />} />
               <Route path="/help" element={<KnowledgeBasePage />} />
