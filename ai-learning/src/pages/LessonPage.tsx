@@ -16,6 +16,17 @@ const getResourceIcon = (type: string) => {
   return 'description';
 };
 
+const getYoutubeEmbedUrl = (url: string) => {
+  if (!url) return '';
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  const match = url.match(regExp);
+  
+  if (match && match[2].length === 11) {
+    return `https://www.youtube.com/embed/${match[2]}`;
+  }
+  return url; 
+};
+
 export default function LessonPage({ user }: { user: any }) {
   const navigate = useNavigate();
   const { lessonId } = useParams();
@@ -200,17 +211,30 @@ export default function LessonPage({ user }: { user: any }) {
           ) : (
             instructionalContent.map((contentBlock: any) => {
               if (contentBlock.type === 'video') {
-                const videoSrc = contentBlock.external_url || contentBlock.file_url;
+                const rawSrc = contentBlock.external_url || contentBlock.file_url;
+                const isYouTube = rawSrc?.includes('youtube.com') || rawSrc?.includes('youtu.be');
+              
                 return (
                   <div
                     key={contentBlock.id}
                     className="aspect-video rounded-2xl bg-slate-900 overflow-hidden"
                   >
-                    <video
-                      src={videoSrc}
-                      controls
-                      className="w-full h-full object-cover"
-                    />
+                    {isYouTube ? (
+                      <iframe
+                        src={getYoutubeEmbedUrl(rawSrc)}
+                        title={contentBlock.title || "YouTube video"}
+                        className="w-full h-full"
+                        frameBorder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    ) : (
+                      <video
+                        src={rawSrc}
+                        controls
+                        className="w-full h-full object-cover"
+                      />
+                    )}
                   </div>
                 );
               }
